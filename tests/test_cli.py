@@ -292,6 +292,12 @@ def test_cli_pretty_output():
     assert "3  4" in proc.stdout
 
 
+def test_cli_json_output():
+    proc = run_cli("--format", "json", "sinx")
+    assert proc.returncode == 0
+    assert proc.stdout.strip() == '{"input":"sinx","parsed":"sin(x)","result":"sin(x)"}'
+
+
 def test_cli_no_simplify():
     proc = run_cli("--no-simplify", "sin(x)^2 + cos(x)^2")
     assert proc.returncode == 0
@@ -364,3 +370,28 @@ def test_repl_assignment_and_ans():
     assert "Matrix([[1, 2], [3, 4]])" in proc.stdout
     assert "phil> -2" in proc.stdout
     assert "phil> -1" in proc.stdout
+
+
+def test_repl_reserved_name_f_has_specific_hint_without_wa():
+    proc = subprocess.run(
+        [sys.executable, "-m", "calc"],
+        input="ff = x^3 + 2x\nf = x^3 + 2x\n:q\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0
+    assert "'f' is reserved for function notation in ODEs; try 'ff'" in proc.stderr
+    assert "input?i=f+%3D+x%5E3+%2B+2x" not in proc.stderr
+
+
+def test_repl_json_format():
+    proc = subprocess.run(
+        [sys.executable, "-m", "calc", "--format", "json"],
+        input="2+2\n:q\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0
+    assert '{"input":"2+2","parsed":"2+2","result":"4"}' in proc.stdout

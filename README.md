@@ -57,6 +57,7 @@ Then in REPL, try:
 ```bash
 phil '<expression>'
 phil --format pretty '<expression>'
+phil --format json '<expression>'
 phil --no-simplify '<expression>'
 phil --explain-parse '<expression>'
 phil --latex '<expression>'
@@ -119,6 +120,11 @@ phil --help
 - Default is `--color auto` (enabled only on TTY stderr, disabled for pipes/non-interactive output).
 - `NO_COLOR` disables auto color.
 - `--color always` forces color even when output is not a TTY.
+
+### Interop Output
+
+- `--format json` prints a compact JSON object with `input`, `parsed`, and `result`.
+- `--format json` keeps diagnostics on `stderr`, so `stdout` remains machine-readable.
 
 ### Clear Input/Output Mode
 

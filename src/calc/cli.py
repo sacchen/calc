@@ -6,7 +6,7 @@ import shlex
 import shutil
 import subprocess
 import sys
-from json import JSONDecodeError, loads
+from json import JSONDecodeError, dumps, loads
 from importlib.metadata import PackageNotFoundError, version as package_version
 from urllib.error import URLError
 from urllib.parse import quote_plus
@@ -14,7 +14,7 @@ from urllib.request import urlopen
 
 from sympy import latex as to_latex
 
-from .core import evaluate, normalize_expression, relaxed_function_rewrites
+from .core import evaluate, normalize_expression, relaxed_function_rewrites, reserved_name_suggestion
 
 PACKAGE_NAME = "philcalc"
 CLI_NAME = "phil"
@@ -39,7 +39,7 @@ HELP_TEXT = (
     f"  {CLI_NAME} :examples\n"
     "\n"
     "options:\n"
-    "  --format MODE   output mode: plain, pretty, latex, latex-inline, latex-block\n"
+    "  --format MODE   output mode: plain, pretty, latex, latex-inline, latex-block, json\n"
     "  --latex         print raw LaTeX (no delimiters)\n"
     "  --latex-inline  print LaTeX wrapped as $...$\n"
     "  --latex-block   print LaTeX wrapped as $$...$$\n"
@@ -209,12 +209,24 @@ def _print_wolfram_hint(expr: str, copy_link: bool = False, color_mode: str = "a
             )
 
 
-def _print_error(exc: Exception, expr: str | None = None, color_mode: str = "auto") -> None:
+def _should_print_wolfram_hint(exc: Exception) -> bool:
+    text = str(exc).lower()
+    if "cannot assign reserved name" in text:
+        return False
+    return True
+
+
+def _print_error(
+    exc: Exception,
+    expr: str | None = None,
+    color_mode: str = "auto",
+    session_locals: dict | None = None,
+) -> None:
     print(_style(f"E: {exc}", color="red", stream=sys.stderr, color_mode=color_mode), file=sys.stderr)
-    hint = _hint_for_error(str(exc), expr=expr)
+    hint = _hint_for_error(str(exc), expr=expr, session_locals=session_locals)
     if hint:
         print(_style(f"hint: {hint}", color="yellow", stream=sys.stderr, color_mode=color_mode), file=sys.stderr)
-    if expr:
+    if expr and _should_print_wolfram_hint(exc):
         _print_wolfram_hint(expr, color_mode=color_mode)
 
 
@@ -247,7 +259,7 @@ def _print_parse_explanation(expr: str, relaxed: bool, enabled: bool, color_mode
     )
 
 
-def _hint_for_error(message: str, expr: str | None = None) -> str | None:
+def _hint_for_error(message: str, expr: str | None = None, session_locals: dict | None = None) -> str | None:
     text = message.lower()
     if "unexpected eof" in text:
         if expr and ("/d" in expr or expr.strip().startswith("d(")):
@@ -267,6 +279,13 @@ def _hint_for_error(message: str, expr: str | None = None) -> str | None:
             if "matrix(" in compact.lower():
                 return "matrix syntax: Matrix([[1,2],[3,4]])"
         return "check commas and brackets; try :examples for working patterns"
+    if "cannot assign reserved name:" in text:
+        if "cannot assign reserved name: f" in text:
+            suggestion = reserved_name_suggestion("f", session_locals=session_locals)
+            if suggestion:
+                return f"'f' is reserved for function notation in ODEs; try '{suggestion}'"
+            return "'f' is reserved for function notation in ODEs; choose another variable name (e.g. ff)"
+        return "that name is reserved by phil internals; choose a different variable name"
     if "name '" in text and "is not defined" in text:
         if expr and ("/d" in expr or expr.strip().startswith("d")):
             return "derivative syntax: d(expr, var) or d(sin(x))/dx or df(t)/dt"
@@ -316,6 +335,12 @@ def _format_result(value, format_mode: str) -> str:
     return rendered
 
 
+def _format_json_result(expr: str, relaxed: bool, value) -> str:
+    normalized = normalize_expression(expr, relaxed=relaxed)
+    payload = {"input": expr, "parsed": normalized, "result": str(value)}
+    return dumps(payload, separators=(",", ":"))
+
+
 def _latest_pypi_version() -> str | None:
     url = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
     try:
@@ -362,14 +387,14 @@ def _parse_options(args: list[str]) -> tuple[str, bool, bool, bool, bool, bool, 
             if idx + 1 >= len(args):
                 raise ValueError("missing value for --format")
             mode = args[idx + 1]
-            if mode not in {"plain", "pretty", "latex", "latex-inline", "latex-block"}:
+            if mode not in {"plain", "pretty", "latex", "latex-inline", "latex-block", "json"}:
                 raise ValueError(f"unknown format mode: {mode}")
             format_mode = mode
             idx += 2
             continue
         if arg.startswith("--format="):
             mode = arg.split("=", 1)[1]
-            if mode not in {"plain", "pretty", "latex", "latex-inline", "latex-block"}:
+            if mode not in {"plain", "pretty", "latex", "latex-inline", "latex-block", "json"}:
                 raise ValueError(f"unknown format mode: {mode}")
             format_mode = mode
             idx += 1
@@ -546,12 +571,11 @@ def run(argv: list[str] | None = None) -> int:
         try:
             _print_relaxed_rewrite_hints(expr, relaxed, color_mode)
             _print_parse_explanation(expr, relaxed, explain_parse, color_mode)
-            print(
-                _format_result(
-                    evaluate(expr, relaxed=relaxed, simplify_output=simplify_output),
-                    format_mode,
-                )
-            )
+            value = evaluate(expr, relaxed=relaxed, simplify_output=simplify_output)
+            if format_mode == "json":
+                print(_format_json_result(expr, relaxed, value))
+            else:
+                print(_format_result(value, format_mode))
             if always_wa or _is_complex_expression(expr):
                 _print_wolfram_hint(expr, copy_link=copy_wa, color_mode=color_mode)
             return 0
@@ -598,24 +622,23 @@ def run(argv: list[str] | None = None) -> int:
                 expr = " ".join(remaining)
             _print_relaxed_rewrite_hints(expr, repl_relaxed, repl_color_mode)
             _print_parse_explanation(expr, repl_relaxed, repl_explain_parse, repl_color_mode)
-            print(
-                _format_result(
-                    evaluate(
-                        expr,
-                        relaxed=repl_relaxed,
-                        session_locals=session_locals,
-                        simplify_output=repl_simplify_output,
-                    ),
-                    repl_format_mode,
-                )
+            value = evaluate(
+                expr,
+                relaxed=repl_relaxed,
+                session_locals=session_locals,
+                simplify_output=repl_simplify_output,
             )
+            if repl_format_mode == "json":
+                print(_format_json_result(expr, repl_relaxed, value))
+            else:
+                print(_format_result(value, repl_format_mode))
             if repl_always_wa or _is_complex_expression(expr):
                 _print_wolfram_hint(expr, copy_link=repl_copy_wa, color_mode=repl_color_mode)
         except (EOFError, KeyboardInterrupt):
             print()
             return 0
         except Exception as exc:
-            _print_error(exc, expr=expr, color_mode=repl_color_mode)
+            _print_error(exc, expr=expr, color_mode=repl_color_mode, session_locals=session_locals)
 
 
 if __name__ == "__main__":

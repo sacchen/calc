@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add interop output mode: `--format json`.
+- Improve reserved-name assignment hints (including explicit `f` function-notation guidance).
+- Suppress WolframAlpha hint for reserved-name assignment errors.
+
 ## 0.1.5 - 2026-02-20
 
 - Relaxed parsing now accepts shorthand trig input like `sinx`/`cosx`/`tanx` as `sin(x)`/`cos(x)`/`tan(x)`.

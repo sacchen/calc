@@ -1,6 +1,6 @@
 import pytest
 
-from calc.core import evaluate
+from calc.core import evaluate, reserved_name_suggestion
 
 
 def test_exact_arithmetic():
@@ -99,6 +99,11 @@ def test_assignment_and_ans_with_session_locals():
 def test_assignment_rejects_reserved_name():
     with pytest.raises(ValueError, match="reserved name"):
         evaluate("sin = 2", session_locals={})
+
+
+def test_reserved_name_suggestion_prefers_close_session_name():
+    assert reserved_name_suggestion("f", {"ff": 1, "alpha": 2}) == "ff"
+    assert reserved_name_suggestion("f", {"alpha": 2}) is None
 
 
 def test_no_simplify_mode():

@@ -80,7 +80,7 @@ Matrix helpers are exposed in the allowed namespace (`Matrix`, `eye`, `zeros`, `
 - `--color auto|always|never` controls ANSI color for diagnostic stderr lines (`E:` and `hint:`).
 - `NO_COLOR` disables auto color mode.
 - Optional LaTeX output via `--latex`, `--latex-inline`, or `--latex-block`.
-- Optional output formats via `--format` (`plain`, `pretty`, `latex`, `latex-inline`, `latex-block`).
+- Optional output formats via `--format` (`plain`, `pretty`, `latex`, `latex-inline`, `latex-block`, `json`).
 - ODE shorthand (`dy/dx = y`, `y' = y`, `y'' + y = 0`) is normalized to `Eq(...)` expressions using `y(x)` semantics.
 - Common LaTeX-style input (`$...$`, `\frac{...}{...}`, `\sin`, `\ln`, `\sqrt{...}`) is normalized before parsing.
 

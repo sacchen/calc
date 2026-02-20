@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from difflib import get_close_matches
 
 from sympy import (
     Abs,
@@ -222,6 +223,18 @@ def relaxed_function_rewrites(expression: str) -> list[tuple[str, str]]:
     normalized = re.sub(r"\bln\s*\(", "log(", normalized)
     _, rewrites = _normalize_bare_function_shorthand(normalized, relaxed=True)
     return rewrites
+
+
+def reserved_name_suggestion(name: str, session_locals: dict | None = None) -> str | None:
+    if not session_locals:
+        return None
+    prefix_matches = sorted(k for k in session_locals if k.startswith(name) and k != name)
+    if prefix_matches:
+        return prefix_matches[0]
+    matches = get_close_matches(name, list(session_locals.keys()), n=1, cutoff=0.75)
+    if not matches:
+        return None
+    return matches[0]
 
 
 def _normalize_ode_equation_dependents(text: str) -> str:

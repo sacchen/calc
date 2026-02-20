@@ -48,6 +48,13 @@ def test_parse_options_format_and_no_simplify():
     assert rest == ["2+2"]
 
 
+def test_parse_options_json_format():
+    format_mode, *_ = cli._parse_options(["--format", "json", "x"])
+    assert format_mode == "json"
+    format_mode, *_ = cli._parse_options(["--format=json", "x"])
+    assert format_mode == "json"
+
+
 def test_parse_options_double_dash_and_single_dash_literal():
     _, _, _, _, _, _, _, rest = cli._parse_options(["--", "--not-an-option"])
     assert rest == ["--not-an-option"]
@@ -88,6 +95,8 @@ def test_hint_for_error_messages():
     assert "y(x)" in cli._hint_for_error("dsolve() and classify_ode() only work with functions of one variable, not y")
     assert "blocked patterns" in cli._hint_for_error("blocked token in expression")
     assert "enter a math expression" in cli._hint_for_error("empty expression")
+    assert "reserved for function notation" in cli._hint_for_error("cannot assign reserved name: f")
+    assert "reserved by phil internals" in cli._hint_for_error("cannot assign reserved name: sin")
     assert cli._hint_for_error("different error") is None
 
 
@@ -102,6 +111,11 @@ def test_format_result_latex():
     assert cli._format_result(2, format_mode="latex") == "2"
     assert cli._format_result(2, format_mode="latex-inline") == "$2$"
     assert cli._format_result(2, format_mode="latex-block") == "$$\n2\n$$"
+
+
+def test_format_json_result():
+    out = cli._format_json_result("sinx", relaxed=True, value="sin(x)")
+    assert out == '{"input":"sinx","parsed":"sin(x)","result":"sin(x)"}'
 
 
 def test_format_result_pretty():
@@ -238,6 +252,18 @@ def test_run_one_shot_error(monkeypatch, capsys):
     assert rc == 1
     assert "E: empty expression" in captured.err
     assert "try WolframAlpha" in captured.err
+
+
+def test_run_one_shot_reserved_name_error_skips_wolfram_hint(monkeypatch, capsys):
+    def boom(expr, **kwargs):
+        raise ValueError("cannot assign reserved name: f")
+
+    monkeypatch.setattr(cli, "evaluate", boom)
+    rc = cli.run(["f = x^2"])
+    captured = capsys.readouterr()
+    assert rc == 1
+    assert "reserved for function notation" in captured.err
+    assert "try WolframAlpha" not in captured.err
 
 
 def test_run_repl_uses_strict_flag(monkeypatch, capsys):

@@ -44,6 +44,7 @@ Project-specific knowledge for contributors.
 - `--format latex`
 - `--format latex-inline`
 - `--format latex-block`
+- `--format json` (compact JSON with `input`, `parsed`, `result`; diagnostics on stderr)
 - `--color auto|always|never` (diagnostic stderr coloring only)
 
 Legacy aliases:
@@ -55,6 +56,8 @@ Legacy aliases:
 - Errors start with `E:`
 - Follow-up guidance via `hint:`
 - Syntax-specific hints exist for common derivative and matrix mistakes.
+- Reserved-name assignment errors show targeted hints (e.g. `f` → ODE function-notation guidance).
+- WolframAlpha hint is suppressed for reserved-name assignment errors.
 
 ## Testing Expectations
 
