@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.6 - 2026-02-20
 
 - Add interop output mode: `--format json`.
 - Improve reserved-name assignment hints (including explicit `f` function-notation guidance).
