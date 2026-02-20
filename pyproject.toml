@@ -27,7 +27,7 @@ source = "vcs"
 
 [tool.hatch.version.raw-options]
 version_scheme = "guess-next-dev"
-local_scheme = "node-and-date"
+local_scheme = "no-local-version"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/calc"]
