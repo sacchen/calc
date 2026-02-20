@@ -37,3 +37,17 @@ def test_blocks_long_expression():
     expr = "1+" * 2000 + "1"
     with pytest.raises(ValueError, match="expression too long"):
         evaluate(expr)
+
+
+def test_relaxed_parses_braces_ln_and_implicit_multiplication():
+    expr = "(1 - 25e^5)e^{-5t} + (25e^5 - 1)t e^{-5t} + t e^{-5t} ln(t)"
+    out = str(evaluate(expr, relaxed=True))
+    assert "exp(-5*t)" in out
+    assert "log(t)" in out
+
+
+def test_relaxed_parses_second_long_expression():
+    expr = "(854/2197)e^{8t}+(1343/2197)e^{-5t}+((9/26)t^2 -(9/169)t)e^{8t}"
+    out = str(evaluate(expr, relaxed=True))
+    assert "exp(" in out
+    assert "exp(-5*t)" in out

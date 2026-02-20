@@ -42,8 +42,11 @@ This project is a standard `uv` package:
 - Restricted `global_dict` with `__builtins__` removed
 - Transformations: `auto_number`, `factorial_notation`, `convert_xor`
 - Input validation before parsing (length and blocked-token checks)
+- Normalization pass for user-friendly syntax (`{}` -> `()`, `ln(` -> `log(`)
 
 This significantly reduces parser attack surface for CLI usage. It is still not a hardened sandbox for arbitrary untrusted multi-tenant input.
+
+By default, CLI evaluation uses relaxed parsing (`implicit_multiplication_application`) to make long calculator-style expressions easier to enter.
 
 ## Exit-code behavior
 
@@ -57,10 +60,15 @@ This significantly reduces parser attack surface for CLI usage. It is still not 
 - Minimal command mode inspired by terminal-first tools:
   - `:h` or `:help` shows available commands
   - `:examples` shows a compact learning set
+  - `:version` shows installed version
+  - `:update` prints the upgrade command
   - `:q` or `:quit` exits
 - Errors are terse and prefixed with `E:`.
 - Common failures include contextual `hint:` lines.
 - Evaluation failures include a WolframAlpha URL hint for optional browser lookup.
+- Complex successful expressions also show a WolframAlpha equivalent hint.
+- `--wa` forces hints for all expressions; `--copy-wa` attempts clipboard copy.
+- Optional LaTeX output via `--latex`.
 
 ## Startup time
 
