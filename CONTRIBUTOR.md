@@ -59,6 +59,23 @@ CI runs:
 
 If your change adds behavior, add/adjust tests in the correct category.
 
+## Release Process
+
+Releases are automated through GitHub Actions + PyPI trusted publishing.
+
+Create and push a tag:
+
+```bash
+git pull
+git tag -a v0.2.0 -m "Release v0.2.0"
+git push origin v0.2.0
+```
+
+Then confirm:
+
+- workflow success in GitHub Actions
+- new version appears on PyPI (`philcalc`)
+
 ## Adding or Changing Math Operations
 
 1. Add required import(s) in `src/calc/core.py`.

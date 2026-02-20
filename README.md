@@ -129,6 +129,21 @@ In REPL:
 
 For release notifications on GitHub, use "Watch" -> "Custom" -> "Releases only" on the repo page.
 
+## Release
+
+Tagged releases are published to PyPI automatically via GitHub Actions trusted publishing.
+
+```bash
+git pull
+git tag -a v0.2.0 -m "Release v0.2.0"
+git push origin v0.2.0
+```
+
+Then verify:
+
+- GitHub Actions run: https://github.com/sacchen/phil/actions
+- PyPI release page: https://pypi.org/project/philcalc/
+
 ### Long Expressions (easier input)
 
 `phil` now uses relaxed parsing by default:
