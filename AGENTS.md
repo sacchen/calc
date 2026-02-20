@@ -22,6 +22,27 @@ Keep `phil` accurate, safe, and fast to use for real math workflows in a termina
    - `uv run --group dev pytest`
    - `uv run --group dev pytest --cov=calc --cov-report=term-missing --cov-fail-under=90`
 
+## Perfect Commit Protocol
+
+Use "perfect commit" discipline for every change:
+
+1. One logical change per commit.
+2. Commit must build, test, and run in isolation.
+3. Include tests for behavior changes or bug fixes.
+4. Include docs updates for user-visible changes.
+5. Keep unrelated refactors out of the same commit.
+
+Commit message format:
+
+- Subject: imperative, specific, <=72 chars.
+- Body: why this change exists, what changed, and user impact.
+- Footer (optional): issue/PR references.
+
+Suggested pre-commit gate:
+
+- `git diff --staged` is coherent and minimal.
+- tests pass locally for touched areas (or full suite for broad changes).
+
 ## High-Value Areas
 
 - Parser normalization and syntax sugar (`df/dt`, relaxed input).

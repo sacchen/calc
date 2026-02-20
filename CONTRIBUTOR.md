@@ -28,6 +28,28 @@ Test categories:
 
 Property tests (`hypothesis`) are used for high-value invariants in numeric/symbolic behavior.
 
+## Perfect Commit Standard
+
+Adopt a "perfect commit" bar:
+
+1. One logical change per commit.
+2. Commit is releasable on its own (no broken intermediate states).
+3. Tests accompany behavior changes.
+4. Docs accompany user-facing changes.
+5. Exclude unrelated cleanup from the same commit.
+
+Before committing:
+
+- Review staged diff only: `git diff --staged`
+- Verify tests:
+  - `uv run --group dev pytest`
+  - `uv run --group dev pytest --cov=calc --cov-report=term-missing --cov-fail-under=90`
+
+Commit message guidance:
+
+- Subject: imperative and specific, <=72 chars.
+- Body: explain why, summarize what changed, note user impact.
+
 ## CI Expectations
 
 CI runs:
