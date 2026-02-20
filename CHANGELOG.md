@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.7 - 2026-02-20
+
+- Refactor CLI internals to use a dedicated diagnostics module and typed option parsing.
+- Keep CLI behavior stable while improving maintainability and test clarity.
+- Consolidate contributor docs to keep `README.md` as the canonical CLI flag reference.
+
 ## 0.1.6 - 2026-02-20
 
 - Add interop output mode: `--format json`.
