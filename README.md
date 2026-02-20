@@ -83,10 +83,16 @@ calc --help
 
 ## Updates
 
-From anywhere:
+From published package (anywhere):
 
 ```bash
 uv tool upgrade calc-cli
+```
+
+From a local clone of this repo:
+
+```bash
+uv tool install --force --reinstall --refresh .
 ```
 
 Quick check in CLI:
