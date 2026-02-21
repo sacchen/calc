@@ -7,7 +7,7 @@ Powered by [SymPy](https://www.sympy.org/).
 ## Positioning and Philosophy
 
 - `phil` is built to be the first-stop calculator for quick terminal math, homework, and symbolic workflows.
-- It aims to be the fastest practical choice before opening WolframAlpha, Google, Python REPL, or Calculator84.
+- It aims to be the fastest practical choice before opening WolframAlpha, Google, Python REPL, or Calculate84.
 - It is not trying to replace Desmos for graphing-first workflows.
 - Priorities: speed, correctness, and discoverability.
 - Input should be forgiving: when `phil` makes an assumption, it should make that interpretation visible to the user.
