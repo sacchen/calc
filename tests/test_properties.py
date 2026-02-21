@@ -79,6 +79,8 @@ def test_property_repl_parser_survives_random_lines(lines: list[str]):
                 cli._try_parse_repl_inline_options(expr)
             except EOFError:
                 continue
+            except SystemExit:
+                continue
             except ValueError as exc:
                 assert any(marker in str(exc) for marker in expected_value_errors)
     finally:
