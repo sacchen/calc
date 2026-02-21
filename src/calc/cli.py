@@ -374,8 +374,6 @@ def _consume_bracket_literal(text: str, start: int) -> tuple[str, int]:
             depth -= 1
             if depth == 0:
                 return text[start : idx + 1], idx + 1
-            if depth < 0:
-                break
         idx += 1
     raise ValueError("unclosed bracket literal; expected closing ']'")
 

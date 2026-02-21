@@ -668,6 +668,11 @@ def test_parse_linalg_keyed_literals_space_only_text():
     assert cli._parse_linalg_keyed_literals("   ", set()) == {}
 
 
+def test_parse_linalg_keyed_literals_allows_space_after_equals():
+    parsed = cli._parse_linalg_keyed_literals("A=   [[1,2],[3,4]]", {"A"})
+    assert parsed == {"A": "[[1,2],[3,4]]"}
+
+
 def test_try_parse_repl_inline_options():
     parsed = cli._try_parse_repl_inline_options("--latex 2+2")
     assert parsed is not None

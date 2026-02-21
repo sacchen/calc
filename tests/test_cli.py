@@ -1,3 +1,5 @@
+import json
+import re
 import subprocess
 import sys
 
@@ -27,12 +29,156 @@ def test_cli_invalid_expression_exit_code():
     assert "wolframalpha.com/input?i=bad%28" in proc.stderr
 
 
+def test_cli_safety_guards_blocked_and_too_long_input():
+    blocked = run_cli("1+2;3")
+    assert blocked.returncode == 1
+    assert "E: blocked token in expression" in blocked.stderr
+
+    too_long_expr = "1+" * 2000 + "1"
+    too_long = run_cli(too_long_expr)
+    assert too_long.returncode == 1
+    assert "E: expression too long (max 2000 chars)" in too_long.stderr
+
+
+def test_contract_one_shot_and_repl_parity_for_success_and_error():
+    # Success contract: same math result; diagnostics stay off stderr.
+    one_shot_ok = run_cli("2+2")
+    repl_ok = subprocess.run(
+        [sys.executable, "-m", "calc"],
+        input="2+2\n:q\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert one_shot_ok.returncode == 0
+    assert one_shot_ok.stdout.strip() == "4"
+    assert "E:" not in one_shot_ok.stderr
+    assert repl_ok.returncode == 0
+    assert "phil> 4" in repl_ok.stdout
+    assert "E:" not in repl_ok.stderr
+
+    # Error contract: diagnostics on stderr in both modes; exit differs by mode.
+    one_shot_err = run_cli("bad(")
+    repl_err = subprocess.run(
+        [sys.executable, "-m", "calc"],
+        input="bad(\n:q\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert one_shot_err.returncode == 1
+    assert "E:" in one_shot_err.stderr
+    assert "hint:" in one_shot_err.stderr
+    assert repl_err.returncode == 0
+    assert "E:" in repl_err.stderr
+    assert "hint:" in repl_err.stderr
+
+
+def test_contract_json_mode_one_shot_and_repl_parity():
+    one_shot_ok = run_cli("--format", "json", "2+2")
+    repl_ok = subprocess.run(
+        [sys.executable, "-m", "calc", "--format", "json"],
+        input="2+2\n:q\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert one_shot_ok.returncode == 0
+    assert one_shot_ok.stdout.strip() == '{"input":"2+2","parsed":"2+2","result":"4"}'
+    assert one_shot_ok.stderr.strip() == ""
+    assert repl_ok.returncode == 0
+    assert '{"input":"2+2","parsed":"2+2","result":"4"}' in repl_ok.stdout
+    assert "E:" not in repl_ok.stderr
+
+    one_shot_err = run_cli("--format", "json", "bad(")
+    repl_err = subprocess.run(
+        [sys.executable, "-m", "calc", "--format", "json"],
+        input="bad(\n:q\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert one_shot_err.returncode == 1
+    assert one_shot_err.stdout.strip() == ""
+    assert "E:" in one_shot_err.stderr
+    assert repl_err.returncode == 0
+    assert "E:" in repl_err.stderr
+
+
+def test_contract_strict_mode_one_shot_and_repl_parity():
+    one_shot_ok = run_cli("--strict", "2+2")
+    repl_ok = subprocess.run(
+        [sys.executable, "-m", "calc", "--strict"],
+        input="2+2\n:q\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert one_shot_ok.returncode == 0
+    assert one_shot_ok.stdout.strip() == "4"
+    assert one_shot_ok.stderr.strip() == ""
+    assert repl_ok.returncode == 0
+    assert "phil> 4" in repl_ok.stdout
+    assert "E:" not in repl_ok.stderr
+
+    one_shot_err = run_cli("--strict", "2x")
+    repl_err = subprocess.run(
+        [sys.executable, "-m", "calc", "--strict"],
+        input="2x\n:q\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert one_shot_err.returncode == 1
+    assert "E:" in one_shot_err.stderr
+    assert "invalid syntax" in one_shot_err.stderr
+    assert repl_err.returncode == 0
+    assert "E:" in repl_err.stderr
+    assert "invalid syntax" in repl_err.stderr
+
+
+def test_contract_no_simplify_mode_one_shot_and_repl_parity():
+    expr = "sin(x)^2 + cos(x)^2"
+    one_shot = run_cli("--no-simplify", expr)
+    repl = subprocess.run(
+        [sys.executable, "-m", "calc", "--no-simplify"],
+        input=f"{expr}\n:q\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    expected = "sin(x)**2 + cos(x)**2"
+    assert one_shot.returncode == 0
+    assert one_shot.stdout.strip() == expected
+    assert "E:" not in one_shot.stderr
+    assert repl.returncode == 0
+    assert f"phil> {expected}" in repl.stdout
+    assert "E:" not in repl.stderr
+
+
 def test_cli_help_flag():
     proc = run_cli("--help")
     assert proc.returncode == 0
     assert "usage:" in proc.stdout
     assert "phil v" in proc.stdout
     assert ":examples" in proc.stdout
+    assert "?, ??, ???" in proc.stdout
+
+
+def test_cli_help_alias_chain_shortcuts():
+    proc = run_cli("?")
+    assert proc.returncode == 0
+    assert "help chain:" in proc.stdout
+    assert "power-user shortcuts" in proc.stdout
+
+    proc = run_cli("??")
+    assert proc.returncode == 0
+    assert "power-user shortcuts:" in proc.stdout
+
+    proc = run_cli("???")
+    assert proc.returncode == 0
+    assert "capability demos:" in proc.stdout
+    assert "10^100000 + 1 - 10^100000" in proc.stdout
 
 
 def test_cli_unknown_option_exit_code():
@@ -114,6 +260,17 @@ def test_cli_ode_shortcut():
     assert "dsolve(Eq(d(y(x), x), y(x)), y(x))" in proc.stdout
 
 
+def test_cli_linalg_shortcut():
+    proc = run_cli(":linalg")
+    assert proc.returncode == 0
+    assert "linear algebra quick reference:" in proc.stdout
+    assert "msolve(Matrix([[2,1],[1,3]]), Matrix([1,2]))" in proc.stdout
+
+    proc = run_cli(":la")
+    assert proc.returncode == 0
+    assert "linear algebra quick reference:" in proc.stdout
+
+
 def test_cli_ode_alias_solves_with_readable_output():
     proc = run_cli("ode y' = y")
     assert proc.returncode == 0
@@ -126,10 +283,22 @@ def test_cli_ode_alias_with_ics():
     assert "y(x) = exp(x)" in proc.stdout
 
 
+def test_cli_linalg_alias_solve():
+    proc = run_cli("linalg solve A=[[2,1],[1,3]] b=[1,2]")
+    assert proc.returncode == 0
+    assert "Matrix([[1/5], [3/5]])" in proc.stdout
+
+
+def test_cli_linalg_alias_rref():
+    proc = run_cli("linalg rref A=[[1,2],[2,4]]")
+    assert proc.returncode == 0
+    assert "(0,)" in proc.stdout
+
+
 def test_repl_help_and_quit():
     proc = subprocess.run(
         [sys.executable, "-m", "calc"],
-        input=":h\n:q\n",
+        input=":h\n?\n??\n???\n:q\n",
         capture_output=True,
         text=True,
         check=False,
@@ -137,6 +306,9 @@ def test_repl_help_and_quit():
     assert proc.returncode == 0
     assert "phil v" in proc.stdout
     assert ":h help" in proc.stdout
+    assert "help chain:" in proc.stdout
+    assert "power-user shortcuts:" in proc.stdout
+    assert "capability demos:" in proc.stdout
     assert "repl commands:" in proc.stdout
 
 
@@ -180,6 +352,18 @@ def test_repl_ode_command():
     assert "ode quick reference:" in proc.stdout
 
 
+def test_repl_linalg_command():
+    proc = subprocess.run(
+        [sys.executable, "-m", "calc"],
+        input=":linalg\n:la\n:q\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0
+    assert "linear algebra quick reference:" in proc.stdout
+
+
 def test_repl_ode_alias():
     proc = subprocess.run(
         [sys.executable, "-m", "calc"],
@@ -190,6 +374,18 @@ def test_repl_ode_alias():
     )
     assert proc.returncode == 0
     assert "y(x) = C1*exp(x)" in proc.stdout
+
+
+def test_repl_linalg_alias():
+    proc = subprocess.run(
+        [sys.executable, "-m", "calc"],
+        input="linalg solve A=[[2,1],[1,3]] b=[1,2]\n:q\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0
+    assert "Matrix([[1/5], [3/5]])" in proc.stdout
 
 
 def test_repl_unknown_command_hint():
@@ -320,7 +516,8 @@ def test_cli_pretty_output():
 def test_cli_json_output():
     proc = run_cli("--format", "json", "sinx")
     assert proc.returncode == 0
-    assert proc.stdout.strip() == '{"input":"sinx","parsed":"sin(x)","result":"sin(x)"}'
+    payload = json.loads(proc.stdout.strip())
+    assert payload == {"input": "sinx", "parsed": "sin(x)", "result": "sin(x)"}
 
 
 def test_cli_no_simplify():
@@ -419,4 +616,7 @@ def test_repl_json_format():
         check=False,
     )
     assert proc.returncode == 0
-    assert '{"input":"2+2","parsed":"2+2","result":"4"}' in proc.stdout
+    match = re.search(r'\{"input":".+?"\,"parsed":".+?"\,"result":".+?"\}', proc.stdout)
+    assert match is not None
+    payload = json.loads(match.group(0))
+    assert payload == {"input": "2+2", "parsed": "2+2", "result": "4"}

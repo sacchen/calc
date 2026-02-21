@@ -1,6 +1,6 @@
 import pytest
 
-from calc.core import evaluate, reserved_name_suggestion
+from calc.core import evaluate, normalize_expression, reserved_name_suggestion
 
 
 def test_exact_arithmetic():
@@ -41,6 +41,24 @@ def test_latex_higher_derivative_ode_equation_normalizes():
 
 def test_markdown_wrapped_expression():
     assert str(evaluate("$d(x^2, x)$")) == "2*x"
+
+
+@pytest.mark.parametrize(
+    "expr",
+    [
+        "'d(x^2, x)'",
+        '"d(x^2, x)"',
+        "$$d(x^2, x)$$",
+        r"\(d(x^2, x)\)",
+        r"\[d(x^2, x)\]",
+    ],
+)
+def test_additional_wrapped_expression_forms(expr: str):
+    assert str(evaluate(expr)) == "2*x"
+
+
+def test_latex_fraction_normalization():
+    assert str(evaluate(r"\frac{1}{2}")) == "1/2"
 
 
 def test_derivative_infers_single_symbol():
@@ -86,6 +104,13 @@ def test_numeric_eval():
 def test_matrix_helpers():
     assert str(evaluate("det(Matrix([[1,2],[3,4]]))")) == "-2"
     assert str(evaluate("rank(Matrix([[1,2],[2,4]]))")) == "1"
+    rref_out = str(evaluate("rref(Matrix([[1,2],[2,4]]))"))
+    assert "[1, 2]" in rref_out
+    assert "[0, 0]" in rref_out
+    assert rref_out.endswith(", (0,))")
+    assert str(evaluate("nullspace(Matrix([[1,2],[2,4]]))")) == "[Matrix([\n[-2],\n[ 1]])]"
+    assert str(evaluate("msolve(Matrix([[2,1],[1,3]]), Matrix([1,2]))")) == "Matrix([[1/5], [3/5]])"
+    assert str(evaluate("linsolve((Eq(2*x + y, 1), Eq(x + 3*y, 2)), (x, y))")) == "{(1/5, 3/5)}"
 
 
 def test_assignment_and_ans_with_session_locals():
@@ -103,6 +128,7 @@ def test_assignment_rejects_reserved_name():
 
 def test_reserved_name_suggestion_prefers_close_session_name():
     assert reserved_name_suggestion("f", {"ff": 1, "alpha": 2}) == "ff"
+    assert reserved_name_suggestion("alpah", {"alpha": 2}) == "alpha"
     assert reserved_name_suggestion("f", {"alpha": 2}) is None
 
 
@@ -113,7 +139,7 @@ def test_no_simplify_mode():
 
 
 def test_blocks_import_injection():
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError, match="blocked token"):
         evaluate('__import__("os").system("echo bad")')
 
 
@@ -151,6 +177,10 @@ def test_normalizes_latex_commands():
     assert str(evaluate(r"\sqrt{x}")) == "sqrt(x)"
 
 
+def test_function_exponentiation_parsing():
+    assert str(evaluate("sin^2(x) + cos^2(x)", simplify_output=False)) == "sin(x)**2 + cos(x)**2"
+
+
 def test_relaxed_parses_braces_ln_and_implicit_multiplication():
     expr = "(1 - 25e^5)e^{-5t} + (25e^5 - 1)t e^{-5t} + t e^{-5t} ln(t)"
     out = str(evaluate(expr, relaxed=True))
@@ -177,3 +207,8 @@ def test_strict_rejects_sinx_shorthand():
 def test_dsolve_with_y_of_x_notation():
     out = str(evaluate("dsolve(Eq(d(y(x), x), y(x)), y(x))", relaxed=True))
     assert "Eq(y(x), C1*exp(x))" in out
+
+
+def test_ode_shorthand_for_f_of_t_equation_normalizes():
+    normalized = normalize_expression("df/dt = f")
+    assert normalized == "Eq(d(f(t), t), f(t))"
