@@ -47,6 +47,13 @@ def test_parse_options_json_format():
     assert cli._parse_options(["--format=json", "x"]).format_mode == "json"
 
 
+def test_parse_options_format_errors():
+    with pytest.raises(ValueError, match="missing value for --format"):
+        cli._parse_options(["--format"])
+    with pytest.raises(ValueError, match="unknown format mode"):
+        cli._parse_options(["--format=wat", "x"])
+
+
 def test_parse_options_double_dash_and_single_dash_literal():
     assert cli._parse_options(["--", "--not-an-option"]).remaining == ("--not-an-option",)
     assert cli._parse_options(["-1"]).remaining == ("-1",)
@@ -85,6 +92,7 @@ def test_hint_for_error_messages():
     assert "y(x)" in cli._hint_for_error("dsolve() and classify_ode() only work with functions of one variable, not y")
     assert "blocked patterns" in cli._hint_for_error("blocked token in expression")
     assert "enter a math expression" in cli._hint_for_error("empty expression")
+    assert "linalg syntax" in cli._hint_for_error("unknown linalg subcommand")
     assert "reserved for function notation" in cli._hint_for_error("cannot assign reserved name: f")
     assert "reserved by phil internals" in cli._hint_for_error("cannot assign reserved name: sin")
     assert cli._hint_for_error("different error") is None
@@ -94,6 +102,11 @@ def test_is_complex_expression_heuristics():
     assert cli._is_complex_expression("x" * 40) is True
     assert cli._is_complex_expression("d(x^2, x)") is True
     assert cli._is_complex_expression("2+2") is False
+
+
+def test_should_use_color_invalid_mode(monkeypatch):
+    monkeypatch.setattr(cli.sys.stderr, "isatty", lambda: True)
+    assert cli._should_use_color(cli.sys.stderr, "invalid") is False
 
 
 def test_format_result_latex():
@@ -111,6 +124,12 @@ def test_format_json_result():
 def test_split_top_level_commas_for_ode_inputs():
     assert cli._split_top_level_commas("y' = y, y(0)=1") == ["y' = y", "y(0)=1"]
     assert cli._split_top_level_commas("y' = x*y, y(0)=1, y(1)=2") == ["y' = x*y", "y(0)=1", "y(1)=2"]
+
+
+def test_infer_ode_dependent_wrapper():
+    eq_value = cli.evaluate("Eq(d(y(x), x), y(x))")
+    dep = cli._infer_ode_dependent(eq_value)
+    assert str(dep) == "y(x)"
 
 
 def test_evaluate_ode_alias_success():
@@ -134,6 +153,70 @@ def test_evaluate_ode_alias_errors():
         cli._evaluate_ode_alias("ode Eq(x, 1)", relaxed=True, simplify_output=True, session_locals={})
     with pytest.raises(ValueError, match="initial condition must be an equation"):
         cli._evaluate_ode_alias("ode y' = y, 1", relaxed=True, simplify_output=True, session_locals={})
+
+
+def test_evaluate_linalg_alias_solve_success():
+    value, parsed = cli._evaluate_linalg_alias(
+        "linalg solve A=[[2,1],[1,3]] b=[1,2]",
+        relaxed=True,
+        simplify_output=True,
+        session_locals={},
+    )
+    assert str(value) == "Matrix([[1/5], [3/5]])"
+    assert parsed == "msolve(Matrix([[2,1],[1,3]]), Matrix([1,2]))"
+
+
+def test_evaluate_linalg_alias_rref_success():
+    value, parsed = cli._evaluate_linalg_alias(
+        "linalg rref A=[[1,2],[2,4]]",
+        relaxed=True,
+        simplify_output=True,
+        session_locals={},
+    )
+    assert str(value).endswith(", (0,))")
+    assert parsed == "rref(Matrix([[1,2],[2,4]]))"
+
+
+def test_evaluate_linalg_alias_errors():
+    with pytest.raises(ValueError, match="expects a subcommand"):
+        cli._evaluate_linalg_alias("linalg ", relaxed=True, simplify_output=True, session_locals={})
+    with pytest.raises(ValueError, match="unknown linalg subcommand"):
+        cli._evaluate_linalg_alias("linalg wat A=[[1]]", relaxed=True, simplify_output=True, session_locals={})
+    with pytest.raises(ValueError, match="missing linalg parameter"):
+        cli._evaluate_linalg_alias("linalg solve A=[[1]]", relaxed=True, simplify_output=True, session_locals={})
+    with pytest.raises(ValueError, match="square A"):
+        cli._evaluate_linalg_alias("linalg solve A=[[1,2,3],[4,5,6]] b=[1,2]", relaxed=True, simplify_output=True, session_locals={})
+    with pytest.raises(ValueError, match="column vector"):
+        cli._evaluate_linalg_alias("linalg solve A=[[1,0],[0,1]] b=[[1,2]]", relaxed=True, simplify_output=True, session_locals={})
+    with pytest.raises(ValueError, match="len\\(b\\)"):
+        cli._evaluate_linalg_alias("linalg solve A=[[1,0],[0,1]] b=[1,2,3]", relaxed=True, simplify_output=True, session_locals={})
+    with pytest.raises(ValueError, match="unknown linalg parameter"):
+        cli._evaluate_linalg_alias("linalg solve C=[[1,0],[0,1]] b=[1,2]", relaxed=True, simplify_output=True, session_locals={})
+    with pytest.raises(ValueError, match="duplicate linalg parameter"):
+        cli._evaluate_linalg_alias("linalg solve A=[[1,0],[0,1]] A=[[1,0],[0,1]] b=[1,2]", relaxed=True, simplify_output=True, session_locals={})
+    with pytest.raises(ValueError, match="must use '='"):
+        cli._evaluate_linalg_alias("linalg solve A [[1,0],[0,1]] b=[1,2]", relaxed=True, simplify_output=True, session_locals={})
+    with pytest.raises(ValueError, match="unclosed bracket literal"):
+        cli._evaluate_linalg_alias("linalg solve A=[[1,0],[0,1] b=[1,2]", relaxed=True, simplify_output=True, session_locals={})
+
+
+def test_evaluate_linalg_alias_rref_rejects_non_matrix(monkeypatch):
+    monkeypatch.setattr(cli, "evaluate", lambda *a, **k: 123)
+    with pytest.raises(ValueError, match="matrix literal for A"):
+        cli._evaluate_linalg_alias("linalg rref A=[[1,2],[3,4]]", relaxed=True, simplify_output=True, session_locals={})
+
+
+def test_evaluate_linalg_alias_solve_rejects_non_matrix_rhs(monkeypatch):
+    matrix_ok = cli.evaluate("Matrix([[1,0],[0,1]])")
+    calls = {"count": 0}
+
+    def fake_eval(*args, **kwargs):
+        calls["count"] += 1
+        return matrix_ok if calls["count"] == 1 else 7
+
+    monkeypatch.setattr(cli, "evaluate", fake_eval)
+    with pytest.raises(ValueError, match="matrix literals for A and b"):
+        cli._evaluate_linalg_alias("linalg solve A=[[1,0],[0,1]] b=[1,2]", relaxed=True, simplify_output=True, session_locals={})
 
 
 def test_execute_expression_ode_alias_plain_and_json(monkeypatch, capsys):
@@ -168,19 +251,28 @@ def test_execute_expression_ode_alias_plain_and_json(monkeypatch, capsys):
     assert "hint: parsed as: dsolve(" in captured.err
 
 
+def test_execute_expression_linalg_alias_json(capsys):
+    cli._execute_expression(
+        "linalg solve A=[[2,1],[1,3]] b=[1,2]",
+        format_mode="json",
+        relaxed=True,
+        simplify_output=True,
+        explain_parse=True,
+        always_wa=False,
+        copy_wa=False,
+        color_mode="never",
+        session_locals={},
+    )
+    captured = capsys.readouterr()
+    assert '"parsed":"msolve(Matrix([[2,1],[1,3]]), Matrix([1,2]))"' in captured.out
+    assert "hint: parsed as: msolve(Matrix([[2,1],[1,3]]), Matrix([1,2]))" in captured.err
+
+
 def test_format_result_pretty():
     from sympy import Matrix
 
     out = cli._format_result(Matrix([[1, 2], [3, 4]]), format_mode="pretty")
     assert "1  2" in out
-
-
-def test_format_clickable_link_tty(monkeypatch):
-    monkeypatch.setattr(cli.sys.stderr, "isatty", lambda: True)
-    monkeypatch.setenv("TERM", "xterm-256color")
-    out = cli._format_clickable_link("Open", "https://example.com")
-    assert "https://example.com" in out
-    assert "\033]8;;" in out
 
 
 def test_style_respects_color_mode(monkeypatch):
@@ -198,6 +290,23 @@ def test_style_respects_no_color(monkeypatch):
     monkeypatch.setenv("TERM", "xterm-256color")
     out = cli._style("hint", color="yellow", stream=cli.sys.stderr, color_mode="auto")
     assert "\033[33m" not in out
+
+
+def test_style_unknown_color_and_dumb_term(monkeypatch):
+    monkeypatch.setattr(cli.sys.stderr, "isatty", lambda: True)
+    monkeypatch.delenv("NO_COLOR", raising=False)
+    monkeypatch.setenv("TERM", "dumb")
+    out = cli._style("text", color="red", stream=cli.sys.stderr, color_mode="auto")
+    assert out == "text"
+    monkeypatch.setenv("TERM", "xterm-256color")
+    out = cli._style("text", color="unknown", stream=cli.sys.stderr, color_mode="always")
+    assert out == "text"
+
+
+def test_print_relaxed_rewrite_hints_emits_message(capsys):
+    cli._print_relaxed_rewrite_hints("sinx", relaxed=True, color_mode="never")
+    err = capsys.readouterr().err
+    assert "interpreted 'sinx' as 'sin(x)'" in err
 
 
 def test_copy_to_clipboard_success(monkeypatch):
@@ -396,15 +505,25 @@ def test_run_help_returns_zero(capsys):
 
 def test_run_shortcut_commands(monkeypatch, capsys):
     monkeypatch.setattr(cli, "_print_update_status", lambda: print("status"))
+    assert cli.run(["?"]) == 0
+    assert cli.run(["??"]) == 0
+    assert cli.run(["???"]) == 0
     assert cli.run([":examples"]) == 0
     assert cli.run([":tutorial"]) == 0
     assert cli.run([":ode"]) == 0
+    assert cli.run([":linalg"]) == 0
+    assert cli.run([":la"]) == 0
     assert cli.run([":version"]) == 0
     assert cli.run([":update"]) == 0
     out = capsys.readouterr().out
+    assert "help chain:" in out
+    assert "power-user shortcuts:" in out
+    assert "capability demos:" in out
+    assert "10^100000 + 1 - 10^100000" in out
     assert "examples:" in out
     assert "guided tour:" in out
     assert "ode quick reference:" in out
+    assert "linear algebra quick reference:" in out
     assert "phil v" in out
     assert "status" in out
 
@@ -480,8 +599,13 @@ def test_print_wolfram_hint_copy_branches(monkeypatch, capsys):
 def test_handle_repl_commands(monkeypatch, capsys):
     monkeypatch.setattr(cli, "_print_update_status", lambda: print("status"))
     assert cli._handle_repl_command(":h") is True
+    assert cli._handle_repl_command("?") is True
+    assert cli._handle_repl_command("??") is True
+    assert cli._handle_repl_command("???") is True
     assert cli._handle_repl_command(":examples") is True
     assert cli._handle_repl_command(":ode") is True
+    assert cli._handle_repl_command(":linalg") is True
+    assert cli._handle_repl_command(":la") is True
     assert cli._handle_repl_command(":tutorial") is True
     assert cli._handle_repl_command(":tour") is True
     assert cli._handle_repl_command(":version") is True
@@ -491,8 +615,12 @@ def test_handle_repl_commands(monkeypatch, capsys):
     captured = capsys.readouterr()
     err = captured.err
     out = captured.out
+    assert "help chain:" in out
+    assert "power-user shortcuts:" in out
+    assert "capability demos:" in out
     assert "guided tour:" in out
     assert "ode quick reference:" in out
+    assert "linear algebra quick reference:" in out
     assert "unknown command" in err
 
 
@@ -516,6 +644,30 @@ def test_tutorial_command_flow(capsys):
     assert "tutorial mode ended" in out
 
 
+def test_tutorial_command_additional_branches(capsys):
+    assert cli._tutorial_command(":done", None) is False
+    state = {"active": False, "index": 0}
+    assert cli._tutorial_command(":repeat", state) is True
+    assert "start with :tutorial" in capsys.readouterr().err
+    assert cli._tutorial_command(":done", state) is True
+    assert "tutorial is not active" in capsys.readouterr().err
+    assert cli._tutorial_command(":tutorial", state) is True
+    capsys.readouterr()
+    for _ in range(len(cli.TUTORIAL_STEPS)):
+        assert cli._tutorial_command(":next", state) is True
+    out = capsys.readouterr().out
+    assert "tutorial complete. use :done to exit tutorial mode" in out
+
+
+def test_consume_bracket_literal_invalid_start():
+    with pytest.raises(ValueError, match="expected bracketed literal"):
+        cli._consume_bracket_literal("A=[[1,2]]", 0)
+
+
+def test_parse_linalg_keyed_literals_space_only_text():
+    assert cli._parse_linalg_keyed_literals("   ", set()) == {}
+
+
 def test_try_parse_repl_inline_options():
     parsed = cli._try_parse_repl_inline_options("--latex 2+2")
     assert parsed is not None
@@ -530,10 +682,51 @@ def test_try_parse_repl_inline_options():
     assert cli._try_parse_repl_inline_options("2+2") is None
 
 
-def test_eq_has_top_level_comma():
-    assert cli._eq_has_top_level_comma("Eq(x, y)") is True
-    assert cli._eq_has_top_level_comma("Eq(d(y(x), x), y(x))") is True
-    assert cli._eq_has_top_level_comma("Eq(d(y(x), x) y(x))") is False
+def test_try_parse_repl_inline_options_invalid_shell_input():
+    with pytest.raises(ValueError, match="invalid REPL option input"):
+        cli._try_parse_repl_inline_options('phil --format "latex')
+
+
+def test_run_repl_tutorial_command_short_circuits_expression_execution(monkeypatch, capsys):
+    inputs = iter([":tutorial", ":q"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(inputs))
+    monkeypatch.setattr(cli, "_print_repl_startup_update_status", lambda: None)
+    executed: list[str] = []
+    monkeypatch.setattr(cli, "_execute_expression", lambda expr, **kwargs: executed.append(expr))
+    rc = cli.run([])
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert executed == []
+    assert "tutorial mode started" in captured.out
+
+
+def test_run_repl_inline_options_update_session_settings_only(monkeypatch, capsys):
+    inputs = iter(["--latex", ":q"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(inputs))
+    monkeypatch.setattr(cli, "_print_repl_startup_update_status", lambda: None)
+    executed: list[str] = []
+    monkeypatch.setattr(cli, "_execute_expression", lambda expr, **kwargs: executed.append(expr))
+    rc = cli.run([])
+    captured = capsys.readouterr()
+    assert rc == 0
+    assert executed == []
+    assert "REPL options updated for this session" in captured.err
+
+
+def test_run_repl_inline_options_with_remaining_expression(monkeypatch, capsys):
+    inputs = iter(["--strict 2x", ":q"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(inputs))
+    monkeypatch.setattr(cli, "_print_repl_startup_update_status", lambda: None)
+    calls: list[tuple[str, bool]] = []
+
+    def fake_execute(expr: str, **kwargs):
+        calls.append((expr, kwargs["relaxed"]))
+
+    monkeypatch.setattr(cli, "_execute_expression", fake_execute)
+    rc = cli.run([])
+    capsys.readouterr()
+    assert rc == 0
+    assert calls == [("2x", False)]
 
 
 def test_main_module_executes():

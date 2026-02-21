@@ -2,46 +2,49 @@ from __future__ import annotations
 
 import os
 import re
-import shlex
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
-from json import JSONDecodeError, dumps, loads
 from importlib.metadata import PackageNotFoundError, version as package_version
-from urllib.error import URLError
 from urllib.parse import quote_plus
 from urllib.request import urlopen
 
-from sympy import Eq, dsolve
-from sympy import latex as to_latex
-from sympy.core.function import AppliedUndef
+from sympy import Eq
+from sympy.matrices.matrixbase import MatrixBase
 
 from .core import evaluate, normalize_expression
 from .diagnostics import (
-    eq_has_top_level_comma as _eq_has_top_level_comma,
     hint_for_error as _hint_for_error,
     parse_explanation,
     relaxed_rewrite_messages,
     should_print_wolfram_hint,
 )
+from .options import COLOR_MODES, CLIOptions, parse_options
+from .ode import (
+    evaluate_ode_alias as evaluate_ode_alias_impl,
+    infer_ode_dependent as infer_ode_dependent_impl,
+    split_top_level_commas as split_top_level_commas_impl,
+)
+from .repl import (
+    handle_repl_command as handle_repl_command_impl,
+    try_parse_repl_inline_options as try_parse_repl_inline_options_impl,
+    tutorial_command as tutorial_command_impl,
+)
+from .render import (
+    format_json_result as format_json_result_impl,
+    format_result as format_result_impl,
+    render_value as render_value_impl,
+)
+from .updates import (
+    compare_versions as _compare_versions_impl,
+    latest_pypi_version as _latest_pypi_version_impl,
+    repl_startup_update_status_lines,
+    update_status_lines,
+)
 
 PACKAGE_NAME = "philcalc"
 CLI_NAME = "phil"
 UPDATE_CMD = "uv tool upgrade philcalc"
-FORMAT_MODES = ("plain", "pretty", "latex", "latex-inline", "latex-block", "json")
-
-
-@dataclass(frozen=True)
-class CLIOptions:
-    format_mode: str = "plain"
-    relaxed: bool = True
-    simplify_output: bool = True
-    explain_parse: bool = False
-    always_wa: bool = False
-    copy_wa: bool = False
-    color_mode: str = "auto"
-    remaining: tuple[str, ...] = ()
 
 
 def _calc_version() -> str:
@@ -78,9 +81,11 @@ HELP_TEXT = (
     "\n"
     "repl commands:\n"
     "  :h, :help      show this help\n"
+    "  ?, ??, ???     progressive help chain (discover more features)\n"
     "  :examples      show example expressions\n"
     "  :tutorial      show guided tour for new users\n"
     "  :ode           show ODE quick reference and templates\n"
+    "  :linalg, :la   show linear algebra quick reference and templates\n"
     "  :next          next tutorial step (after :tutorial)\n"
     "  :repeat        repeat current tutorial step\n"
     "  :done          exit tutorial mode\n"
@@ -90,14 +95,46 @@ HELP_TEXT = (
     "\n"
     "quick examples:\n"
     "  (1 - 25e^5)e^{-5t} + (25e^5 - 1)t e^{-5t} + t e^{-5t} ln(t)\n"
+    "  10^100000 + 1 - 10^100000\n"
+    "  sin^2(x) + cos^2(x)\n"
+    "  msolve(Matrix([[2,1],[1,3]]), Matrix([1,2]))\n"
     "  d(x^3 + 2*x, x)\n"
     "  int(sin(x), x)\n"
     "  solve(x^2 - 4, x)\n"
     "  N(pi, 20)"
 )
+HELP_CHAIN_TEXT = (
+    "help chain:\n"
+    "  ?    = standard help\n"
+    "  ??   = power-user shortcuts\n"
+    "  ???  = capability demos\n"
+)
+HELP_POWER_TEXT = (
+    "power-user shortcuts:\n"
+    "  use inline REPL options: --latex d(x^2, x)\n"
+    "  inspect parser rewrites: --explain-parse 'sinx'\n"
+    "  machine-readable output: --format json 'sinx'\n"
+    "  fast ODE solve alias: ode y' = y, y(0)=1\n"
+    "  session memory: ans + 1, A = Matrix([[1,2],[3,4]])\n"
+    "hint: try ??? for capability demos"
+)
+HELP_DEMO_TEXT = (
+    "capability demos:\n"
+    "  exact huge integer arithmetic:\n"
+    "    10^100000 + 1 - 10^100000\n"
+    "    -> 1\n"
+    "  exact rational arithmetic:\n"
+    "    1/3 + 1/6\n"
+    "    -> 1/2\n"
+    "  symbolic workflow:\n"
+    "    d(x^3 + 2*x, x), int(sin(x), x), solve(x^2 - 4, x)\n"
+)
 EXAMPLES_TEXT = (
     "examples:\n"
     "  1/3 + 1/6\n"
+    "  10^100000 + 1 - 10^100000\n"
+    "  sin^2(x) + cos^2(x)\n"
+    "  msolve(Matrix([[2,1],[1,3]]), Matrix([1,2]))\n"
     "  d(x^3 + 2*x, x)\n"
     "  int(sin(x), x)\n"
     "  solve(x^2 - 4, x)\n"
@@ -113,7 +150,8 @@ TUTORIAL_TEXT = (
     "  4) ODE input: dy/dx = y ; y' = y ; \\frac{dy}{dx} = y\n"
     "  5) Solve ODE: dsolve(Eq(d(y(x), x), y(x)), y(x))\n"
     "  6) LaTeX style: $d(x^2, x)$ ; \\sin(x)^2 + \\cos(x)^2\n"
-    "  7) Use :examples for more patterns\n"
+    "  7) Exactness demo: phil '10^100000 + 1 - 10^100000'\n"
+    "  8) Use :examples and ? / ?? / ??? for more patterns\n"
     "full tutorial: TUTORIAL.md"
 )
 ODE_TEXT = (
@@ -134,6 +172,22 @@ ODE_TEXT = (
     "notes:\n"
     "  Eq(...) is equation form (not assignment)\n"
     "  y(x) means dependent function notation required by dsolve\n"
+)
+LINALG_TEXT = (
+    "linear algebra quick reference:\n"
+    "  quick start:\n"
+    "    linalg solve A=[[2,1],[1,3]] b=[1,2]\n"
+    "    linalg rref A=[[1,2],[2,4]]\n"
+    "    msolve(Matrix([[2,1],[1,3]]), Matrix([1,2]))\n"
+    "    rref(Matrix([[1,2],[2,4]]))\n"
+    "    nullspace(Matrix([[1,2],[2,4]]))\n"
+    "\n"
+    "symbolic systems:\n"
+    "  linsolve((Eq(2*x + y, 1), Eq(x + 3*y, 2)), (x, y))\n"
+    "\n"
+    "notes:\n"
+    "  use Matrix([...]) for vectors and matrices\n"
+    "  msolve(A, b) expects square, invertible A for LUsolve\n"
 )
 TUTORIAL_STEPS = (
     "step 1/6\n  run: 1/3 + 1/6\n  expect: 1/2",
@@ -161,13 +215,6 @@ def _is_complex_expression(expr: str) -> bool:
         return True
     markers = ("d(", "int(", "solve(", "dsolve(", "Eq(", "ln(", "log(", "^", "{", "}", "e^{")
     return any(marker in expr for marker in markers)
-
-
-def _format_clickable_link(label: str, url: str) -> str:
-    if not sys.stderr.isatty() or os.getenv("TERM") == "dumb":
-        return url
-    esc = "\033"
-    return f"{esc}]8;;{url}{esc}\\{label}{esc}]8;;{esc}\\"
 
 
 def _should_use_color(stream, color_mode: str) -> bool:
@@ -267,62 +314,35 @@ def _print_parse_explanation(expr: str, relaxed: bool, enabled: bool, color_mode
 
 
 def _format_result(value, format_mode: str) -> str:
-    if format_mode == "plain":
-        return str(value)
-    if format_mode == "pretty":
-        from sympy import pretty as to_pretty
-
-        return to_pretty(value)
-    rendered = to_latex(value)
-    if format_mode == "latex-inline":
-        return f"${rendered}$"
-    if format_mode == "latex-block":
-        return f"$$\n{rendered}\n$$"
-    return rendered
+    return format_result_impl(value, format_mode)
 
 
 def _format_json_result(expr: str, relaxed: bool, value) -> str:
-    normalized = normalize_expression(expr, relaxed=relaxed)
-    payload = {"input": expr, "parsed": normalized, "result": str(value)}
-    return dumps(payload, separators=(",", ":"))
+    return format_json_result_impl(
+        expr,
+        relaxed,
+        value,
+        normalize_expression_fn=normalize_expression,
+    )
 
 
 def _render_value(value, *, format_mode: str, expr: str, relaxed: bool, parsed_expr: str | None = None) -> str:
-    if format_mode == "json":
-        if parsed_expr is None:
-            return _format_json_result(expr, relaxed, value)
-        payload = {"input": expr, "parsed": parsed_expr, "result": str(value)}
-        return dumps(payload, separators=(",", ":"))
-    return _format_result(value, format_mode)
+    return render_value_impl(
+        value,
+        format_mode=format_mode,
+        expr=expr,
+        relaxed=relaxed,
+        normalize_expression_fn=normalize_expression,
+        parsed_expr=parsed_expr,
+    )
 
 
 def _split_top_level_commas(text: str) -> list[str]:
-    parts: list[str] = []
-    current: list[str] = []
-    depth = 0
-    for ch in text:
-        if ch == "(":
-            depth += 1
-        elif ch == ")":
-            depth = max(0, depth - 1)
-        if ch == "," and depth == 0:
-            piece = "".join(current).strip()
-            if piece:
-                parts.append(piece)
-            current = []
-            continue
-        current.append(ch)
-    tail = "".join(current).strip()
-    if tail:
-        parts.append(tail)
-    return parts
+    return split_top_level_commas_impl(text)
 
 
 def _infer_ode_dependent(eq_value: Eq):
-    candidates = sorted(eq_value.atoms(AppliedUndef), key=str)
-    if not candidates:
-        return None
-    return candidates[0]
+    return infer_ode_dependent_impl(eq_value)
 
 
 def _evaluate_ode_alias(
@@ -332,120 +352,146 @@ def _evaluate_ode_alias(
     simplify_output: bool,
     session_locals: dict | None = None,
 ):
-    body = expr[4:].strip()
-    if not body:
-        raise ValueError("ode expects an equation, e.g. ode y' = y")
-
-    pieces = _split_top_level_commas(body)
-    if not pieces:
-        raise ValueError("ode expects an equation, e.g. ode y' = y")
-    equation_text, ic_texts = pieces[0], pieces[1:]
-
-    eq_value = evaluate(
-        equation_text,
+    return evaluate_ode_alias_impl(
+        expr,
+        evaluate_fn=evaluate,
         relaxed=relaxed,
-        session_locals=session_locals,
         simplify_output=simplify_output,
+        session_locals=session_locals,
     )
-    if not isinstance(eq_value, Eq):
-        raise ValueError("ode expects an equation, e.g. ode y' = y")
 
-    dep = _infer_ode_dependent(eq_value)
-    if dep is None:
-        raise ValueError("could not infer dependent function; use y(x)-style notation")
 
-    ics: dict = {}
-    for ic_text in ic_texts:
-        ic_value = evaluate(
-            ic_text,
+def _consume_bracket_literal(text: str, start: int) -> tuple[str, int]:
+    if start >= len(text) or text[start] != "[":
+        raise ValueError("expected bracketed literal like [[...]]")
+    depth = 0
+    idx = start
+    while idx < len(text):
+        ch = text[idx]
+        if ch == "[":
+            depth += 1
+        elif ch == "]":
+            depth -= 1
+            if depth == 0:
+                return text[start : idx + 1], idx + 1
+            if depth < 0:
+                break
+        idx += 1
+    raise ValueError("unclosed bracket literal; expected closing ']'")
+
+
+def _parse_linalg_keyed_literals(text: str, required_keys: set[str]) -> dict[str, str]:
+    idx = 0
+    parsed: dict[str, str] = {}
+    while idx < len(text):
+        while idx < len(text) and text[idx].isspace():
+            idx += 1
+        if idx >= len(text):
+            break
+        key_start = idx
+        while idx < len(text) and text[idx].isalpha():
+            idx += 1
+        key = text[key_start:idx]
+        if key not in required_keys:
+            expected = ", ".join(sorted(required_keys))
+            raise ValueError(f"unknown linalg parameter '{key}'; expected: {expected}")
+        if key in parsed:
+            raise ValueError(f"duplicate linalg parameter '{key}'")
+        while idx < len(text) and text[idx].isspace():
+            idx += 1
+        if idx >= len(text) or text[idx] != "=":
+            raise ValueError(f"linalg parameter '{key}' must use '='")
+        idx += 1
+        while idx < len(text) and text[idx].isspace():
+            idx += 1
+        literal, idx = _consume_bracket_literal(text, idx)
+        parsed[key] = literal
+
+    missing = sorted(required_keys - set(parsed))
+    if missing:
+        missing_text = ", ".join(missing)
+        raise ValueError(f"missing linalg parameter(s): {missing_text}")
+    return parsed
+
+
+def _evaluate_linalg_alias(
+    expr: str,
+    *,
+    relaxed: bool,
+    simplify_output: bool,
+    session_locals: dict | None = None,
+):
+    body = expr[7:].strip()
+    if not body:
+        raise ValueError("linalg expects a subcommand: solve or rref")
+    pieces = body.split(maxsplit=1)
+    subcommand = pieces[0].lower()
+    rest = pieces[1] if len(pieces) > 1 else ""
+
+    if subcommand == "solve":
+        params = _parse_linalg_keyed_literals(rest, {"A", "b"})
+        matrix_text = params["A"]
+        rhs_text = params["b"]
+        matrix_value = evaluate(
+            f"Matrix({matrix_text})",
             relaxed=relaxed,
             session_locals=session_locals,
             simplify_output=simplify_output,
         )
-        if not isinstance(ic_value, Eq):
-            raise ValueError(f"initial condition must be an equation: {ic_text}")
-        ics[ic_value.lhs] = ic_value.rhs
+        rhs_value = evaluate(
+            f"Matrix({rhs_text})",
+            relaxed=relaxed,
+            session_locals=session_locals,
+            simplify_output=simplify_output,
+        )
+        if not isinstance(matrix_value, MatrixBase) or not isinstance(rhs_value, MatrixBase):
+            raise ValueError("linalg solve expects matrix literals for A and b")
+        if matrix_value.rows != matrix_value.cols:
+            raise ValueError("linalg solve expects square A")
+        if rhs_value.cols != 1:
+            raise ValueError("linalg solve expects b as a column vector, e.g. b=[1,2]")
+        if rhs_value.rows != matrix_value.rows:
+            raise ValueError("linalg solve expects len(b) to match rows of A")
+        result = matrix_value.LUsolve(rhs_value)
+        parsed_expr = f"msolve(Matrix({matrix_text}), Matrix({rhs_text}))"
+        return result, parsed_expr
 
-    if ics:
-        result = dsolve(eq_value, dep, ics=ics)
-        ics_rendered = ", ".join(f"{lhs}: {rhs}" for lhs, rhs in ics.items())
-        parsed_expr = f"dsolve({eq_value}, {dep}, ics={{{ics_rendered}}})"
-    else:
-        result = dsolve(eq_value, dep)
-        parsed_expr = f"dsolve({eq_value}, {dep})"
-    return result, parsed_expr
+    if subcommand == "rref":
+        params = _parse_linalg_keyed_literals(rest, {"A"})
+        matrix_text = params["A"]
+        matrix_value = evaluate(
+            f"Matrix({matrix_text})",
+            relaxed=relaxed,
+            session_locals=session_locals,
+            simplify_output=simplify_output,
+        )
+        if not isinstance(matrix_value, MatrixBase):
+            raise ValueError("linalg rref expects a matrix literal for A")
+        result = matrix_value.rref()
+        parsed_expr = f"rref(Matrix({matrix_text}))"
+        return result, parsed_expr
+
+    raise ValueError("unknown linalg subcommand; use 'solve' or 'rref'")
 
 
 def _latest_pypi_version() -> str | None:
-    url = f"https://pypi.org/pypi/{PACKAGE_NAME}/json"
-    try:
-        with urlopen(url, timeout=2.0) as response:
-            payload = loads(response.read().decode("utf-8"))
-        return payload.get("info", {}).get("version")
-    except (OSError, URLError, TimeoutError, ValueError, JSONDecodeError):
-        return None
-
-
-_SEMVERISH_PATTERN = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:\.dev(\d+))?$")
+    return _latest_pypi_version_impl(PACKAGE_NAME, urlopen_fn=urlopen)
 
 
 def _compare_versions(current: str, latest: str) -> int | None:
-    current_match = _SEMVERISH_PATTERN.match(current)
-    latest_match = _SEMVERISH_PATTERN.match(latest)
-    if current_match is None or latest_match is None:
-        return None
-
-    current_release = tuple(int(part) for part in current_match.group(1, 2, 3))
-    latest_release = tuple(int(part) for part in latest_match.group(1, 2, 3))
-    if current_release < latest_release:
-        return -1
-    if current_release > latest_release:
-        return 1
-
-    current_dev = current_match.group(4)
-    latest_dev = latest_match.group(4)
-    if current_dev is None and latest_dev is None:
-        return 0
-    if current_dev is None:
-        return 1
-    if latest_dev is None:
-        return -1
-
-    current_dev_num = int(current_dev)
-    latest_dev_num = int(latest_dev)
-    if current_dev_num < latest_dev_num:
-        return -1
-    if current_dev_num > latest_dev_num:
-        return 1
-    return 0
+    return _compare_versions_impl(current, latest)
 
 
 def _print_update_status() -> None:
-    if VERSION == "dev":
-        print("current version: dev (local checkout)")
-        print("latest version: unknown from local checkout")
-        print("install latest local changes with: uv tool install --force --reinstall --refresh .")
-        return
-
-    latest = _latest_pypi_version()
-    print(f"current version: {VERSION}")
-    if latest is None:
-        print("latest version: unavailable (offline or PyPI unreachable)")
-        print("hint: retry :check when online")
-    else:
-        relation = _compare_versions(VERSION, latest)
-        if relation == 0 or latest == VERSION:
-            print(f"latest version: {latest} (up to date)")
-            print("no update needed")
-        elif relation == -1:
-            print(f"latest version: {latest} (update available)")
-            print(f"update with: {UPDATE_CMD}")
-        elif relation == 1:
-            print(f"latest version: {latest} (you are on a newer local/pre-release build)")
-            print("no update needed")
-        else:
-            print(f"latest version: {latest} (version comparison unavailable)")
-            print(f"update with: {UPDATE_CMD}")
+    latest = None if VERSION == "dev" else _latest_pypi_version()
+    lines = update_status_lines(
+        VERSION,
+        latest,
+        UPDATE_CMD,
+        compare_fn=_compare_versions,
+    )
+    for line in lines:
+        print(line)
 
 
 def _print_repl_startup_update_status() -> None:
@@ -453,151 +499,39 @@ def _print_repl_startup_update_status() -> None:
     # behavior in piped/scripted REPL sessions.
     if not sys.stdin.isatty():
         return
-    if VERSION == "dev":
-        print("startup update check: dev (local checkout)")
-        return
-
-    latest = _latest_pypi_version()
-    if latest is None:
-        print("startup update check: latest version unavailable")
-    else:
-        relation = _compare_versions(VERSION, latest)
-        if relation == 0 or latest == VERSION:
-            print(f"startup update check: v{VERSION} is up to date")
-        elif relation == -1:
-            print(f"startup update check: v{latest} available (you have v{VERSION})")
-            print(f"update with: {UPDATE_CMD}")
-        elif relation == 1:
-            print(f"startup update check: v{VERSION} is newer than latest release v{latest}")
-        else:
-            print("startup update check: version comparison unavailable")
+    latest = None if VERSION == "dev" else _latest_pypi_version()
+    lines = repl_startup_update_status_lines(
+        VERSION,
+        latest,
+        UPDATE_CMD,
+        compare_fn=_compare_versions,
+    )
+    for line in lines:
+        print(line)
 
 
 def _parse_options(args: list[str]) -> CLIOptions:
-    format_mode = "plain"
-    relaxed = True
-    simplify_output = True
-    explain_parse = False
-    always_wa = False
-    copy_wa = False
-    color_mode = "auto"
-    idx = 0
-    while idx < len(args) and args[idx].startswith("-"):
-        arg = args[idx]
-        if arg in {"-h", "--help"}:
-            print(HELP_TEXT)
-            raise SystemExit(0)
-        if arg == "--format":
-            if idx + 1 >= len(args):
-                raise ValueError("missing value for --format")
-            mode = args[idx + 1]
-            if mode not in FORMAT_MODES:
-                raise ValueError(f"unknown format mode: {mode}")
-            format_mode = mode
-            idx += 2
-            continue
-        if arg.startswith("--format="):
-            mode = arg.split("=", 1)[1]
-            if mode not in FORMAT_MODES:
-                raise ValueError(f"unknown format mode: {mode}")
-            format_mode = mode
-            idx += 1
-            continue
-        if arg == "--latex":
-            format_mode = "latex"
-            idx += 1
-            continue
-        if arg == "--latex-inline":
-            format_mode = "latex-inline"
-            idx += 1
-            continue
-        if arg == "--latex-block":
-            format_mode = "latex-block"
-            idx += 1
-            continue
-        if arg == "--strict":
-            relaxed = False
-            idx += 1
-            continue
-        if arg == "--no-simplify":
-            simplify_output = False
-            idx += 1
-            continue
-        if arg == "--explain-parse":
-            explain_parse = True
-            idx += 1
-            continue
-        if arg == "--wa":
-            always_wa = True
-            idx += 1
-            continue
-        if arg == "--copy-wa":
-            copy_wa = True
-            idx += 1
-            continue
-        if arg == "--color":
-            if idx + 1 >= len(args):
-                raise ValueError("missing value for --color")
-            mode = args[idx + 1]
-            if mode not in COLOR_MODES:
-                raise ValueError(f"unknown color mode: {mode}")
-            color_mode = mode
-            idx += 2
-            continue
-        if arg.startswith("--color="):
-            mode = arg.split("=", 1)[1]
-            if mode not in COLOR_MODES:
-                raise ValueError(f"unknown color mode: {mode}")
-            color_mode = mode
-            idx += 1
-            continue
-        if arg == "--":
-            idx += 1
-            break
-        if arg.startswith("--"):
-            raise ValueError(f"unknown option: {arg}")
-        break
-    return CLIOptions(
-        format_mode=format_mode,
-        relaxed=relaxed,
-        simplify_output=simplify_output,
-        explain_parse=explain_parse,
-        always_wa=always_wa,
-        copy_wa=copy_wa,
-        color_mode=color_mode,
-        remaining=tuple(args[idx:]),
-    )
+    return parse_options(args, help_text=HELP_TEXT)
 
 
 def _handle_repl_command(expr: str, color_mode: str = "auto") -> bool:
-    if expr in {":q", ":quit", ":x"}:
-        raise EOFError
-    if expr in {":h", ":help"}:
-        print(HELP_TEXT)
-        return True
-    if expr == ":examples":
-        print(EXAMPLES_TEXT)
-        return True
-    if expr in {":tutorial", ":tour"}:
-        print(TUTORIAL_TEXT)
-        return True
-    if expr == ":ode":
-        print(ODE_TEXT)
-        return True
-    if expr in {":v", ":version"}:
-        print(f"{CLI_NAME} v{VERSION}")
-        return True
-    if expr in {":update", ":check"}:
-        _print_update_status()
-        return True
-    if expr.startswith(":"):
-        print(_style("E: unknown command", color="red", stream=sys.stderr, color_mode=color_mode), file=sys.stderr)
-        print(
-            _style("hint: use :h to list commands", color="yellow", stream=sys.stderr, color_mode=color_mode),
-            file=sys.stderr,
-        )
-        return True
-    return False
+    return handle_repl_command_impl(
+        expr,
+        help_text=HELP_TEXT,
+        help_chain_text=HELP_CHAIN_TEXT,
+        help_power_text=HELP_POWER_TEXT,
+        help_demo_text=HELP_DEMO_TEXT,
+        examples_text=EXAMPLES_TEXT,
+        tutorial_text=TUTORIAL_TEXT,
+        ode_text=ODE_TEXT,
+        linalg_text=LINALG_TEXT,
+        cli_name=CLI_NAME,
+        version=VERSION,
+        print_update_status=_print_update_status,
+        style_fn=_style,
+        color_mode=color_mode,
+        stderr=sys.stderr,
+    )
 
 
 def _print_tutorial_step(index: int) -> None:
@@ -605,52 +539,21 @@ def _print_tutorial_step(index: int) -> None:
 
 
 def _tutorial_command(expr: str, state: dict | None) -> bool:
-    if state is None:
-        return False
-    if expr in {":tutorial", ":tour"}:
-        state["active"] = True
-        state["index"] = 0
-        print("tutorial mode started. use :next, :repeat, :done")
-        _print_tutorial_step(state["index"])
-        return True
-    if expr == ":next":
-        if not state.get("active", False):
-            print("hint: start with :tutorial", file=sys.stderr)
-            return True
-        nxt = state["index"] + 1
-        if nxt >= len(TUTORIAL_STEPS):
-            print("tutorial complete. use :done to exit tutorial mode")
-            return True
-        state["index"] = nxt
-        _print_tutorial_step(state["index"])
-        return True
-    if expr == ":repeat":
-        if not state.get("active", False):
-            print("hint: start with :tutorial", file=sys.stderr)
-            return True
-        _print_tutorial_step(state["index"])
-        return True
-    if expr == ":done":
-        if state.get("active", False):
-            state["active"] = False
-            print("tutorial mode ended")
-        else:
-            print("hint: tutorial is not active; use :tutorial", file=sys.stderr)
-        return True
-    return False
+    return tutorial_command_impl(
+        expr,
+        state,
+        tutorial_steps=TUTORIAL_STEPS,
+        print_tutorial_step=_print_tutorial_step,
+        stderr=sys.stderr,
+    )
 
 
 def _try_parse_repl_inline_options(expr: str):
-    line = expr.strip()
-    if line.startswith(f"{CLI_NAME} "):
-        line = line[len(CLI_NAME) :].strip()
-    elif not line.startswith("-"):
-        return None
-    try:
-        tokens = shlex.split(line)
-    except ValueError as exc:
-        raise ValueError(f"invalid REPL option input: {exc}") from exc
-    return _parse_options(tokens)
+    return try_parse_repl_inline_options_impl(
+        expr,
+        cli_name=CLI_NAME,
+        parse_options_fn=_parse_options,
+    )
 
 
 def _execute_expression(
@@ -666,6 +569,7 @@ def _execute_expression(
     session_locals: dict | None = None,
 ) -> None:
     is_ode_alias = expr.strip().lower().startswith("ode ")
+    is_linalg_alias = expr.strip().lower().startswith("linalg ")
     if is_ode_alias:
         value, parsed_expr = _evaluate_ode_alias(
             expr,
@@ -685,6 +589,22 @@ def _execute_expression(
                 relaxed=relaxed,
                 parsed_expr=parsed_expr,
             )
+    elif is_linalg_alias:
+        value, parsed_expr = _evaluate_linalg_alias(
+            expr,
+            relaxed=relaxed,
+            simplify_output=simplify_output,
+            session_locals=session_locals,
+        )
+        if explain_parse:
+            print(_style(f"hint: parsed as: {parsed_expr}", color="yellow", stream=sys.stderr, color_mode=color_mode), file=sys.stderr)
+        rendered = _render_value(
+            value,
+            format_mode=format_mode,
+            expr=expr,
+            relaxed=relaxed,
+            parsed_expr=parsed_expr,
+        )
     else:
         _print_relaxed_rewrite_hints(expr, relaxed, color_mode)
         _print_parse_explanation(expr, relaxed, explain_parse, color_mode)
@@ -722,11 +642,24 @@ def run(argv: list[str] | None = None) -> int:
 
     if remaining:
         expr = " ".join(remaining)
+        if expr == "?":
+            print(HELP_TEXT)
+            print(HELP_CHAIN_TEXT)
+            return 0
+        if expr == "??":
+            print(HELP_POWER_TEXT)
+            return 0
+        if expr == "???":
+            print(HELP_DEMO_TEXT)
+            return 0
         if expr == ":examples":
             print(EXAMPLES_TEXT)
             return 0
         if expr == ":ode":
             print(ODE_TEXT)
+            return 0
+        if expr in {":linalg", ":la"}:
+            print(LINALG_TEXT)
             return 0
         if expr in {":tutorial", ":tour"}:
             print(TUTORIAL_TEXT)
