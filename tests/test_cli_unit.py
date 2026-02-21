@@ -276,6 +276,33 @@ def test_print_update_status_latest_unavailable(monkeypatch, capsys):
     assert "unavailable" in out
 
 
+def test_print_repl_startup_update_status_non_interactive(monkeypatch, capsys):
+    monkeypatch.setattr(cli.sys, "stdin", SimpleNamespace(isatty=lambda: False))
+    monkeypatch.setattr(cli, "_latest_pypi_version", lambda: "9.9.9")
+    cli._print_repl_startup_update_status()
+    out = capsys.readouterr().out
+    assert out == ""
+
+
+def test_print_repl_startup_update_status_up_to_date(monkeypatch, capsys):
+    monkeypatch.setattr(cli.sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(cli, "VERSION", "1.2.3")
+    monkeypatch.setattr(cli, "_latest_pypi_version", lambda: "1.2.3")
+    cli._print_repl_startup_update_status()
+    out = capsys.readouterr().out
+    assert "up to date" in out
+
+
+def test_print_repl_startup_update_status_update_available(monkeypatch, capsys):
+    monkeypatch.setattr(cli.sys, "stdin", SimpleNamespace(isatty=lambda: True))
+    monkeypatch.setattr(cli, "VERSION", "1.2.3")
+    monkeypatch.setattr(cli, "_latest_pypi_version", lambda: "2.0.0")
+    cli._print_repl_startup_update_status()
+    out = capsys.readouterr().out
+    assert "available" in out
+    assert "update with:" in out
+
+
 def test_calc_version_package_missing(monkeypatch):
     def boom(_):
         raise cli.PackageNotFoundError
@@ -376,6 +403,16 @@ def test_run_repl_empty_then_command(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "repl commands:" in out
+
+
+def test_run_repl_prints_startup_update_status(monkeypatch, capsys):
+    inputs = iter([":q"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(inputs))
+    monkeypatch.setattr(cli, "_print_repl_startup_update_status", lambda: print("startup-status"))
+    rc = cli.run([])
+    out = capsys.readouterr().out
+    assert rc == 0
+    assert "startup-status" in out
 
 
 def test_run_repl_error_path(monkeypatch, capsys):

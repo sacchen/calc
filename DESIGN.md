@@ -70,6 +70,7 @@ Matrix helpers are exposed in the allowed namespace (`Matrix`, `eye`, `zeros`, `
   - `:tutorial` / `:tour` starts a guided walkthrough (`:next`, `:repeat`, `:done`)
   - `:ode` prints ODE-specific templates and `dsolve` patterns
   - `:version` shows installed version
+  - interactive startup prints automatic update status
   - `:update` / `:check` compare current vs latest version and print upgrade command
   - `:q` or `:quit` exits
 - Errors are terse and prefixed with `E:`.

@@ -403,6 +403,25 @@ def _print_update_status() -> None:
     print(f"update with: {UPDATE_CMD}")
 
 
+def _print_repl_startup_update_status() -> None:
+    # Only auto-check when actually interactive to avoid noisy/non-deterministic
+    # behavior in piped/scripted REPL sessions.
+    if not sys.stdin.isatty():
+        return
+    if VERSION == "dev":
+        print("startup update check: dev (local checkout)")
+        return
+
+    latest = _latest_pypi_version()
+    if latest is None:
+        print("startup update check: latest version unavailable")
+    elif latest == VERSION:
+        print(f"startup update check: v{VERSION} is up to date")
+    else:
+        print(f"startup update check: v{latest} available (you have v{VERSION})")
+        print(f"update with: {UPDATE_CMD}")
+
+
 def _parse_options(args: list[str]) -> CLIOptions:
     format_mode = "plain"
     relaxed = True
@@ -685,6 +704,7 @@ def run(argv: list[str] | None = None) -> int:
 
     print(f"{CLI_NAME} v{VERSION} REPL. :h help, :q quit, Ctrl-D exit.")
     print(f"update: {UPDATE_CMD}")
+    _print_repl_startup_update_status()
     session_locals: dict = {}
     repl_format_mode = format_mode
     repl_relaxed = relaxed

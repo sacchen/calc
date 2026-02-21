@@ -96,6 +96,7 @@ REPL commands:
 - `:q` / `:quit` / `:x` exit
 
 The REPL starts with a short hint line and prints targeted `hint:` messages on common errors.
+On interactive terminals, REPL startup also prints whether your installed version is up to date.
 Unknown `:` commands return a short correction hint.
 Evaluation errors also include: `hint: try WolframAlpha: <url>`.
 Complex expressions also print a WolframAlpha equivalent hint after successful evaluation.
@@ -160,6 +161,7 @@ phil :check
 
 In REPL:
 
+- Startup (interactive terminals) prints a one-line up-to-date or update-available status.
 - `:version` shows your installed version.
 - `:update`/`:check` show current version, latest known release, and update command.
 
