@@ -377,6 +377,7 @@ If you get stuck, run `:examples` or `:h`.
 - In ODE input, prefer explicit multiplication (`20*y` instead of `20y`) for predictable parsing.
 - Common LaTeX wrappers and commands are normalized: `$...$`, `\(...\)`, `\sin`, `\cos`, `\ln`, `\sqrt{...}`, `\frac{a}{b}`
 - `name = expr` assigns in REPL session (`ans` is always last result)
+- Built-in helper names are reserved for evaluation (for example `sin`, `gamma`, `atan2`, `I`) and cannot be reassigned.
 - Undefined symbols raise an error
 
 ## Safety limits
