@@ -701,6 +701,31 @@ def test_handle_repl_commands(monkeypatch, capsys):
     assert "unknown command" in err
 
 
+def test_handle_one_shot_shortcut_command_supported(monkeypatch):
+    seen: list[tuple[str, str]] = []
+
+    def fake_handle(expr: str, color_mode: str = "auto") -> bool:
+        seen.append((expr, color_mode))
+        return True
+
+    monkeypatch.setattr(cli, "_handle_repl_command", fake_handle)
+    assert cli._handle_one_shot_shortcut_command(":examples", color_mode="never") is True
+    assert seen == [(":examples", "never")]
+
+
+def test_handle_one_shot_shortcut_command_unsupported(monkeypatch):
+    called = False
+
+    def fake_handle(expr: str, color_mode: str = "auto") -> bool:
+        nonlocal called
+        called = True
+        return True
+
+    monkeypatch.setattr(cli, "_handle_repl_command", fake_handle)
+    assert cli._handle_one_shot_shortcut_command(":h") is False
+    assert called is False
+
+
 def test_tutorial_command_flow(capsys):
     state = {"active": False, "index": 0}
     assert cli._tutorial_command(":next", state) is True

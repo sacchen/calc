@@ -559,6 +559,30 @@ def _handle_repl_command(expr: str, color_mode: str = "auto") -> bool:
     )
 
 
+ONE_SHOT_SHORTCUT_COMMANDS = {
+    "?",
+    "??",
+    "???",
+    ":examples",
+    ":ode",
+    ":linalg",
+    ":la",
+    ":tutorial",
+    ":t",
+    ":tour",
+    ":v",
+    ":version",
+    ":update",
+    ":check",
+}
+
+
+def _handle_one_shot_shortcut_command(expr: str, color_mode: str = "auto") -> bool:
+    if expr not in ONE_SHOT_SHORTCUT_COMMANDS:
+        return False
+    return _handle_repl_command(expr, color_mode=color_mode)
+
+
 def _print_tutorial_step(index: int) -> None:
     print(TUTORIAL_STEPS[index])
 
@@ -686,32 +710,7 @@ def run(argv: list[str] | None = None) -> int:
 
     if remaining:
         expr = " ".join(remaining)
-        if expr == "?":
-            print(HELP_CHAIN_TEXT)
-            return 0
-        if expr == "??":
-            print(HELP_POWER_TEXT)
-            return 0
-        if expr == "???":
-            print(HELP_DEMO_TEXT)
-            return 0
-        if expr == ":examples":
-            print(EXAMPLES_TEXT)
-            return 0
-        if expr == ":ode":
-            print(ODE_TEXT)
-            return 0
-        if expr in {":linalg", ":la"}:
-            print(LINALG_TEXT)
-            return 0
-        if expr in {":tutorial", ":t", ":tour"}:
-            print(TUTORIAL_TEXT)
-            return 0
-        if expr in {":v", ":version"}:
-            print(f"{CLI_NAME} v{VERSION}")
-            return 0
-        if expr in {":update", ":check"}:
-            _print_update_status()
+        if _handle_one_shot_shortcut_command(expr, color_mode=color_mode):
             return 0
         try:
             _execute_expression(
