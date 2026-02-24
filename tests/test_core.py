@@ -1,5 +1,5 @@
 import pytest
-from sympy import Symbol
+from sympy import I, Symbol
 
 from calc.core import LOCALS_DICT, evaluate, normalize_expression, reserved_name_suggestion
 
@@ -140,11 +140,14 @@ def test_expanded_sympy_allowlist_functions_are_available():
     assert str(evaluate("binomial(5, 2)")) == "10"
     assert str(evaluate("gamma(6)")) == "120"
     assert str(evaluate("limit(sin(x)/x, x, 0)")) == "1"
+    assert str(evaluate("atan2(1, 1)")) == "pi/4"
+    assert str(evaluate("I^2")) == "-1"
 
 
 def test_expanded_sympy_allowlist_does_not_override_curated_names():
     assert LOCALS_DICT["S"] is Symbol
     assert str(evaluate('S("A")')) == "A"
+    assert LOCALS_DICT["I"] is I
 
 
 def test_numeric_eval():
@@ -176,6 +179,8 @@ def test_assignment_rejects_reserved_name():
         evaluate("sin = 2", session_locals={})
     with pytest.raises(ValueError, match="reserved name"):
         evaluate("gamma = 2", session_locals={})
+    with pytest.raises(ValueError, match="reserved name"):
+        evaluate("I = 2", session_locals={})
 
 
 def test_expanded_sympy_allowlist_keeps_local_surface_safe():

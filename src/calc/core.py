@@ -133,13 +133,14 @@ LOCALS_DICT = {
 }
 
 SYMPY_EXTRA_ALLOWLIST = (
-    "S",
+    "I",
     "acos",
     "acosh",
     "apart",
     "asin",
     "asinh",
     "atan",
+    "atan2",
     "atanh",
     "binomial",
     "cancel",
@@ -171,7 +172,9 @@ def _expanded_sympy_locals() -> dict[str, object]:
         if not name.isidentifier() or name.startswith("_"):
             continue
         value = getattr(_sympy, name, None)
-        if value is None or not callable(value):
+        if value is None:
+            continue
+        if not (callable(value) or isinstance(value, _sympy.Basic)):
             continue
         expanded[name] = value
     return expanded
