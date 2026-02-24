@@ -4,6 +4,7 @@ import re
 from difflib import get_close_matches
 from math import log
 
+import sympy as _sympy
 from sympy import (
     Abs,
     Add,
@@ -50,7 +51,7 @@ from sympy.parsing.sympy_parser import (
     function_exponentiation,
     implicit_multiplication_application,
     parse_expr,
-    rationalize, 
+    rationalize,
 )
 
 x, y, z, t = symbols("x y z t")
@@ -131,6 +132,53 @@ LOCALS_DICT = {
     "S": Symbol,
 }
 
+SYMPY_EXTRA_ALLOWLIST = (
+    "S",
+    "acos",
+    "acosh",
+    "apart",
+    "asin",
+    "asinh",
+    "atan",
+    "atanh",
+    "binomial",
+    "cancel",
+    "collect",
+    "cosh",
+    "cot",
+    "csc",
+    "expand",
+    "factor",
+    "gamma",
+    "limit",
+    "powsimp",
+    "product",
+    "sec",
+    "series",
+    "sinh",
+    "summation",
+    "tanh",
+    "together",
+    "trigsimp",
+)
+
+
+def _expanded_sympy_locals() -> dict[str, object]:
+    expanded: dict[str, object] = {}
+    for name in SYMPY_EXTRA_ALLOWLIST:
+        if name in LOCALS_DICT:
+            continue
+        if not name.isidentifier() or name.startswith("_"):
+            continue
+        value = getattr(_sympy, name, None)
+        if value is None or not callable(value):
+            continue
+        expanded[name] = value
+    return expanded
+
+
+LOCALS_DICT.update(_expanded_sympy_locals())
+
 
 # parse_expr internally uses eval. Keep globals minimal and disable builtins.
 GLOBAL_DICT = {
@@ -145,14 +193,14 @@ GLOBAL_DICT = {
     "factorial": factorial,
 }
 
-TRANSFORMS = (auto_number, factorial_notation, convert_xor, function_exponentiation, rationalize, )
+TRANSFORMS = (auto_number, factorial_notation, convert_xor, function_exponentiation, rationalize)
 RELAXED_TRANSFORMS = (
     auto_number,
     factorial_notation,
     convert_xor,
     function_exponentiation,
     implicit_multiplication_application,
-    rationalize, 
+    rationalize,
 )
 MAX_EXPRESSION_CHARS = 2000
 BLOCKED_PATTERN = re.compile(r"(__|;|\n|\r)")
