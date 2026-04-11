@@ -84,6 +84,10 @@ def test_hint_for_error_additional_branches():
         "solve() got an unexpected keyword argument 'A'",
         expr="solve(A=[[1,2],[3,4]], b=[1,2])",
     )
+    assert "matrix solve syntax" in diagnostics.hint_for_error(
+        "solve() does not accept matrix keyword arguments",
+        expr="a=solve(A=[[1,2],[3,4]], b=[1,2])",
+    )
     assert "ambiguous solve target" in diagnostics.hint_for_error(
         "ambiguous variable for solve; pass one explicitly",
         expr="solve(x + y)",

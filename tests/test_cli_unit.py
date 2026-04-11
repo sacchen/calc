@@ -623,6 +623,7 @@ def test_run_help_returns_zero(capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "usage:" in out
+    assert "--no-wa" in out
 
 
 def test_run_shortcut_commands(monkeypatch, capsys):

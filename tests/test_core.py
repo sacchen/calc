@@ -143,6 +143,11 @@ def test_solve_rejects_matrix_keyword_arguments_with_whitespace():
         evaluate("solve (A=[[1,2],[3,4]], b=[1,2])")
 
 
+def test_assignment_wrapped_solve_rejects_matrix_keyword_arguments():
+    with pytest.raises(ValueError, match="matrix keyword arguments"):
+        evaluate("a=solve(A=[[1,2],[3,4]], b=[1,2])", session_locals={})
+
+
 def test_solve_allows_nested_non_matrix_keyword_arguments():
     with pytest.raises(NameError, match="foo"):
         evaluate("solve(foo(A=1), x)")

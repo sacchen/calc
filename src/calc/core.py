@@ -610,9 +610,9 @@ def evaluate(
     simplify_output: bool = True,
 ):
     _validate_expression(expression)
-    if _is_matrix_style_solve_input(expression):
-        raise ValueError("solve() does not accept matrix keyword arguments")
     normalized = normalize_expression(expression, relaxed=relaxed)
+    if _is_matrix_style_solve_input(expression) or _is_matrix_style_solve_input(normalized):
+        raise ValueError("solve() does not accept matrix keyword arguments")
     transforms = RELAXED_TRANSFORMS if relaxed else TRANSFORMS
     local_dict = dict(LOCALS_DICT)
     if session_locals:
@@ -623,6 +623,8 @@ def evaluate(
         name, rhs = match.group(1), match.group(2)
         if name in LOCALS_DICT:
             raise ValueError(f"cannot assign reserved name: {name}")
+        if _is_matrix_style_solve_input(rhs):
+            raise ValueError("solve() does not accept matrix keyword arguments")
         parsed_rhs = _parse_with_guardrails(
             rhs,
             local_dict=local_dict,

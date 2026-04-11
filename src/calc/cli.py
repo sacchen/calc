@@ -63,7 +63,7 @@ HELP_TEXT = (
     f"{CLI_NAME} v{VERSION} - symbolic CLI calculator\n"
     "\n"
     "usage:\n"
-    f"  {CLI_NAME} [--format MODE] [--latex|--latex-inline|--latex-block] [--strict] [--no-simplify] [--explain-parse] [--wa] [--copy-wa] [--color MODE] '<expression>'\n"
+    f"  {CLI_NAME} [--format MODE] [--latex|--latex-inline|--latex-block] [--strict] [--no-simplify] [--explain-parse] [--wa] [--copy-wa] [--no-wa] [--color MODE] '<expression>'\n"
     f"  {CLI_NAME}\n"
     f"  {CLI_NAME} :examples\n"
     "\n"
@@ -722,4 +722,3 @@ def run(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(run())
-
