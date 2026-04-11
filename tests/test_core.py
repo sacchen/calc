@@ -1,6 +1,7 @@
 import pytest
+from sympy import I, Symbol
 
-from calc.core import evaluate, normalize_expression, reserved_name_suggestion
+from calc.core import LOCALS_DICT, evaluate, normalize_expression, reserved_name_suggestion
 
 
 def test_exact_arithmetic():
@@ -135,6 +136,20 @@ def test_symbol_helpers_for_coefficient_workflows():
     assert "C: 421/15" in out
 
 
+def test_expanded_sympy_allowlist_functions_are_available():
+    assert str(evaluate("binomial(5, 2)")) == "10"
+    assert str(evaluate("gamma(6)")) == "120"
+    assert str(evaluate("limit(sin(x)/x, x, 0)")) == "1"
+    assert str(evaluate("atan2(1, 1)")) == "pi/4"
+    assert str(evaluate("I^2")) == "-1"
+
+
+def test_expanded_sympy_allowlist_does_not_override_curated_names():
+    assert LOCALS_DICT["S"] is Symbol
+    assert str(evaluate('S("A")')) == "A"
+    assert LOCALS_DICT["I"] is I
+
+
 def test_numeric_eval():
     assert str(evaluate("N(pi, 10)")) == "3.141592654"
 
@@ -162,6 +177,15 @@ def test_assignment_and_ans_with_session_locals():
 def test_assignment_rejects_reserved_name():
     with pytest.raises(ValueError, match="reserved name"):
         evaluate("sin = 2", session_locals={})
+    with pytest.raises(ValueError, match="reserved name"):
+        evaluate("gamma = 2", session_locals={})
+    with pytest.raises(ValueError, match="reserved name"):
+        evaluate("I = 2", session_locals={})
+
+
+def test_expanded_sympy_allowlist_keeps_local_surface_safe():
+    assert "__builtins__" not in LOCALS_DICT
+    assert all(not name.startswith("_") for name in LOCALS_DICT)
 
 
 def test_reserved_name_suggestion_prefers_close_session_name():
