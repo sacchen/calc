@@ -14,6 +14,7 @@ Goal: make day-to-day terminal math workflows materially faster and clearer.
 - Equation-solving ergonomics:
   - Add a focused solve alias for equation/system workflows.
   - Prefer explicit errors and hints over implicit assumptions when unknowns are ambiguous.
+  - Keep `solve(...)` focused on symbolic solving; if users try matrix-style input like `solve(A=..., B=...)`, steer them to `linalg solve` or `msolve(A, b)` with an explicit recovery hint instead of overloading `solve`.
 - Parser and diagnostics quality:
   - Extend shorthand support where safe.
   - Always show rewrite/normalization hints when interpretation could surprise users.
