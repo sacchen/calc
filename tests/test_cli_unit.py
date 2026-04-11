@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 import calc.cli as cli
+import calc.linalg as linalg
 
 
 def test_parse_options_help_exits(capsys):
@@ -830,15 +831,15 @@ def test_run_repl_tutorial_enter_advances(monkeypatch, capsys):
 
 def test_consume_bracket_literal_invalid_start():
     with pytest.raises(ValueError, match="expected bracketed literal"):
-        cli._consume_bracket_literal("A=[[1,2]]", 0)
+        linalg.consume_bracket_literal("A=[[1,2]]", 0)
 
 
 def test_parse_linalg_keyed_literals_space_only_text():
-    assert cli._parse_linalg_keyed_literals("   ", set()) == {}
+    assert linalg.parse_linalg_keyed_literals("   ", set()) == {}
 
 
 def test_parse_linalg_keyed_literals_allows_space_after_equals():
-    parsed = cli._parse_linalg_keyed_literals("A=   [[1,2],[3,4]]", {"A"})
+    parsed = linalg.parse_linalg_keyed_literals("A=   [[1,2],[3,4]]", {"A"})
     assert parsed == {"A": "[[1,2],[3,4]]"}
 
 
