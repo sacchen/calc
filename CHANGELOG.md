@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.7 - 2026-04-11
+
+- Add `--no-wa` flag to suppress WolframAlpha fallback hints (useful for offline or privacy-sensitive workflows); also settable inline in the REPL.
+- Guard `solve()` against matrix-style keyword arguments (`solve(A=..., b=...)`) with a clear error and redirect hint to `linalg solve` or `msolve(A, b)`.
+- Expand linalg subcommands: `eig`, `nullspace`, `rank` now available alongside existing `solve`, `rref`, `det`, `inv`.
+- Broaden SymPy symbol allowlist so more built-in functions and constants are available without manual import.
+- Unify one-shot and REPL shortcut dispatch so edge-case behavior is consistent across both modes.
+- Improve error hint coverage: deterministic fallback hints for unknown errors, better `solve()` ambiguity diagnostics, `zoo` hint for complex infinity results.
+- Extract linalg dispatch to `linalg.py` (internal refactor; no behavior change).
+- Bump `pygments` to 2.20.0 (CVE-2026-4539).
+
 ## 0.2.6 - 2026-02-23
 
 - Add symbolic-first growth guardrails for huge integer powers, exponent towers, and large factorial inputs.
