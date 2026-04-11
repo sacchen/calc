@@ -80,16 +80,6 @@ def _int(expr, var=None):
     return integrate(expr, var)
 
 
-def _solve(*args, **kwargs):
-    if len(args) == 1:
-        target = args[0]
-        if isinstance(target, _sympy.Basic):
-            free_symbols = sorted(target.free_symbols, key=str)
-            if len(free_symbols) > 1:
-                raise ValueError("ambiguous variable for solve; pass one explicitly")
-    return solve(*args, **kwargs)
-
-
 def _num(expr):
     return expr.as_numer_denom()[0]
 
@@ -115,7 +105,7 @@ LOCALS_DICT = {
     "factorint": factorint,
     "num": _num,
     "den": _den,
-    "solve": _solve,
+    "solve": solve,
     "dsolve": dsolve,
     "Eq": Eq,
     "N": N,

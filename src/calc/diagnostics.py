@@ -116,8 +116,6 @@ def hint_for_error(message: str, expr: str | None = None, session_locals: dict |
     if compact_expr.startswith("solve(") or re.match(r"^[a-z][a-z0-9_]*=solve\(", compact_expr):
         if "matrix keyword arguments" in text or "unexpected keyword argument" in text:
             return "matrix solve syntax: linalg solve A=[[...]] b=[...] or msolve(A, b)"
-        if "ambiguous variable for solve" in text:
-            return "ambiguous solve target: use solve(expr, x) or solve(Eq(...), x)"
 
     if text.startswith("linalg ") or text.startswith("unknown linalg "):
         return "linalg syntax: 'linalg solve A=[[...]] b=[...]', 'linalg rref A=[[...]]', 'linalg det/inv/rank/eig/nullspace A=[[...]]'; use :linalg"

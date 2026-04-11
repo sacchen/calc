@@ -124,9 +124,8 @@ def test_solve():
     assert str(evaluate("solve(x^2 - 4, x)")) == "[-2, 2]"
 
 
-def test_solve_requires_explicit_symbol_when_ambiguous():
-    with pytest.raises(ValueError, match="ambiguous variable for solve"):
-        evaluate("solve(x + y)")
+def test_solve_preserves_sympy_single_equation_behavior():
+    assert str(evaluate("solve(x + y)")) == "[{x: -y}]"
 
 
 def test_solve_system_without_explicit_symbols_still_works():

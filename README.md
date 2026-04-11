@@ -243,7 +243,7 @@ $ phil --format pretty 'Matrix([[1,2],[3,4]])'
 | Symbolic linear solve | `linsolve((Eq(...), Eq(...)), (x, y))` |
 
 Notes:
-`solve` generally requires an explicit variable if `expr` is ambiguous, but system-style inputs like `solve([x + y, x - y])` work automatically. For Ax=b, use `linalg solve A=[[...]] b=[...]` or `msolve(A, b)`.
+For Ax=b, use `linalg solve A=[[...]] b=[...]` or `msolve(A, b)` instead of `solve(A=..., b=...)`.
 
 ### Common symbols
 
