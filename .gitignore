@@ -6,3 +6,4 @@ __pycache__/
 .hypothesis/
 dist/
 .DS_Store
+AGENT_STATE.md

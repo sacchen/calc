@@ -259,6 +259,63 @@ def test_evaluate_linalg_alias_errors():
         cli._evaluate_linalg_alias("linalg solve A,=[[1,0],[0,1]] b=[1,2]", relaxed=True, simplify_output=True, session_locals={})
 
 
+def test_evaluate_linalg_alias_det():
+    value, parsed = cli._evaluate_linalg_alias(
+        "linalg det A=[[1,2],[3,4]]", relaxed=True, simplify_output=True, session_locals={}
+    )
+    assert str(value) == "-2"
+    assert parsed == "det(Matrix([[1,2],[3,4]]))"
+
+
+def test_evaluate_linalg_alias_inv():
+    value, parsed = cli._evaluate_linalg_alias(
+        "linalg inv A=[[1,2],[3,4]]", relaxed=True, simplify_output=True, session_locals={}
+    )
+    assert "Matrix" in str(value)
+    assert parsed == "inv(Matrix([[1,2],[3,4]]))"
+
+
+def test_evaluate_linalg_alias_rank():
+    value, parsed = cli._evaluate_linalg_alias(
+        "linalg rank A=[[1,2],[2,4]]", relaxed=True, simplify_output=True, session_locals={}
+    )
+    assert value == 1
+    assert parsed == "rank(Matrix([[1,2],[2,4]]))"
+
+
+def test_evaluate_linalg_alias_nullspace():
+    value, parsed = cli._evaluate_linalg_alias(
+        "linalg nullspace A=[[1,2],[2,4]]", relaxed=True, simplify_output=True, session_locals={}
+    )
+    assert isinstance(value, list)
+    assert parsed == "nullspace(Matrix([[1,2],[2,4]]))"
+
+
+def test_evaluate_linalg_alias_eig():
+    value, parsed = cli._evaluate_linalg_alias(
+        "linalg eig A=[[1,0],[0,2]]", relaxed=True, simplify_output=True, session_locals={}
+    )
+    assert isinstance(value, dict)
+    assert parsed == "eigvals(Matrix([[1,0],[0,2]]))"
+
+
+def test_execute_expression_zoo_hint(capsys):
+    cli._execute_expression(
+        "1/0",
+        format_mode="plain",
+        relaxed=True,
+        simplify_output=True,
+        explain_parse=False,
+        always_wa=False,
+        copy_wa=False,
+        color_mode="never",
+        session_locals={},
+    )
+    captured = capsys.readouterr()
+    assert "zoo" in captured.out
+    assert "complex infinity" in captured.err
+
+
 def test_evaluate_linalg_alias_rref_rejects_non_matrix(monkeypatch):
     monkeypatch.setattr(cli, "evaluate", lambda *a, **k: 123)
     with pytest.raises(ValueError, match="matrix literal for A"):

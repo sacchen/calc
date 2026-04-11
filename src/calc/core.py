@@ -432,7 +432,7 @@ def normalize_expression(expression: str, relaxed: bool = False) -> str:
 def _evaluate_parsed(parsed, simplify_output: bool):
     if isinstance(parsed, (list, tuple, dict)):
         return parsed
-    if simplify_output:
+    if simplify_output and isinstance(parsed, _sympy.Basic):
         return simplify(parsed)
     return parsed
 
