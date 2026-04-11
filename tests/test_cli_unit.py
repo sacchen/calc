@@ -20,13 +20,14 @@ def test_parse_options_unknown_raises():
 
 
 def test_parse_options_flags():
-    opts = cli._parse_options(["--latex", "--strict", "--explain-parse", "--wa", "--copy-wa", "2+2"])
+    opts = cli._parse_options(["--latex", "--strict", "--explain-parse", "--wa", "--copy-wa", "--no-wa", "2+2"])
     assert opts.format_mode == "latex"
     assert opts.relaxed is False
     assert opts.simplify_output is True
     assert opts.explain_parse is True
     assert opts.always_wa is True
     assert opts.copy_wa is True
+    assert opts.no_wa is True
     assert opts.color_mode == "auto"
     assert opts.remaining == ("2+2",)
 
@@ -309,6 +310,7 @@ def test_execute_expression_zoo_hint(capsys):
         explain_parse=False,
         always_wa=False,
         copy_wa=False,
+        no_wa=False,
         color_mode="never",
         session_locals={},
     )
@@ -346,6 +348,7 @@ def test_execute_expression_ode_alias_plain_and_json(monkeypatch, capsys):
         explain_parse=False,
         always_wa=False,
         copy_wa=False,
+        no_wa=False,
         color_mode="never",
         session_locals={},
     )
@@ -360,6 +363,7 @@ def test_execute_expression_ode_alias_plain_and_json(monkeypatch, capsys):
         explain_parse=True,
         always_wa=False,
         copy_wa=False,
+        no_wa=False,
         color_mode="never",
         session_locals={},
     )
@@ -377,6 +381,7 @@ def test_execute_expression_linalg_alias_json(capsys):
         explain_parse=True,
         always_wa=False,
         copy_wa=False,
+        no_wa=False,
         color_mode="never",
         session_locals={},
     )
@@ -618,6 +623,7 @@ def test_run_help_returns_zero(capsys):
     out = capsys.readouterr().out
     assert rc == 0
     assert "usage:" in out
+    assert "--no-wa" in out
 
 
 def test_run_shortcut_commands(monkeypatch, capsys):
@@ -844,9 +850,10 @@ def test_parse_linalg_keyed_literals_allows_space_after_equals():
 
 
 def test_try_parse_repl_inline_options():
-    parsed = cli._try_parse_repl_inline_options("--latex 2+2")
+    parsed = cli._try_parse_repl_inline_options("--latex --no-wa 2+2")
     assert parsed is not None
     assert parsed.format_mode == "latex"
+    assert parsed.no_wa is True
     assert parsed.remaining == ("2+2",)
 
     parsed = cli._try_parse_repl_inline_options("phil --latex 2+2")
@@ -928,6 +935,7 @@ def test_main_module_executes():
         runpy.run_module("calc.__main__", run_name="__main__")
 
 
+@pytest.mark.filterwarnings("ignore:'calc.cli' found in sys.modules:RuntimeWarning")
 def test_cli_module_main_executes():
     with pytest.raises(SystemExit):
         runpy.run_module("calc.cli", run_name="__main__")

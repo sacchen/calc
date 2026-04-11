@@ -113,6 +113,10 @@ def hint_for_error(message: str, expr: str | None = None, session_locals: dict |
         if "missing 1 required positional argument" in text or "positional argument" in text:
             return "den syntax: den(expr) (for example den(3/14))"
 
+    if compact_expr.startswith("solve(") or re.match(r"^[a-z][a-z0-9_]*=solve\(", compact_expr):
+        if "matrix keyword arguments" in text or "unexpected keyword argument" in text:
+            return "matrix solve syntax: linalg solve A=[[...]] b=[...] or msolve(A, b)"
+
     if text.startswith("linalg ") or text.startswith("unknown linalg "):
         return "linalg syntax: 'linalg solve A=[[...]] b=[...]', 'linalg rref A=[[...]]', 'linalg det/inv/rank/eig/nullspace A=[[...]]'; use :linalg"
     if "unexpected eof" in text:

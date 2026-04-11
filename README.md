@@ -242,6 +242,9 @@ $ phil --format pretty 'Matrix([[1,2],[3,4]])'
 | Solve linear system (Ax=b) | `msolve(Matrix([[...]]), Matrix([...]))` or `linalg solve A=[[...]] b=[...]` |
 | Symbolic linear solve | `linsolve((Eq(...), Eq(...)), (x, y))` |
 
+Notes:
+For Ax=b, use `linalg solve A=[[...]] b=[...]` or `msolve(A, b)` instead of `solve(A=..., b=...)`.
+
 ### Common symbols
 
 `x`, `y`, `z`, `t`, `pi`, `e`, `f`

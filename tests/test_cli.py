@@ -849,6 +849,28 @@ def test_cli_force_wolfram_hint():
     assert "hint: try WolframAlpha:" in proc.stderr
 
 
+def test_cli_no_wa_suppresses_wolfram_hint():
+    proc = run_cli("--no-wa", "bad(")
+    assert proc.returncode == 1
+    assert "hint: try WolframAlpha:" not in proc.stderr
+
+    proc = run_cli("--wa", "--no-wa", "2+2")
+    assert proc.returncode == 0
+    assert "hint: try WolframAlpha:" not in proc.stderr
+
+
+def test_repl_no_wa_suppresses_wolfram_hint():
+    proc = subprocess.run(
+        [sys.executable, "-m", "calc"],
+        input="--no-wa\nbad(\n:q\n",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert proc.returncode == 0
+    assert "hint: try WolframAlpha:" not in proc.stderr
+
+
 def test_cli_version_shortcut():
     proc = run_cli(":version")
     assert proc.returncode == 0

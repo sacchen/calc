@@ -80,6 +80,14 @@ def test_hint_for_error_additional_branches():
         "_den() missing 1 required positional argument: 'expr'",
         expr="den()",
     )
+    assert "matrix solve syntax" in diagnostics.hint_for_error(
+        "solve() got an unexpected keyword argument 'A'",
+        expr="solve(A=[[1,2],[3,4]], b=[1,2])",
+    )
+    assert "matrix solve syntax" in diagnostics.hint_for_error(
+        "solve() does not accept matrix keyword arguments",
+        expr="a=solve(A=[[1,2],[3,4]], b=[1,2])",
+    )
     assert "power too large to expand exactly" in diagnostics.hint_for_error(
         "integer power too large to evaluate exactly (max exponent 1000000)",
         expr="10^10000000000 + 1",

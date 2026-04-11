@@ -124,6 +124,34 @@ def test_solve():
     assert str(evaluate("solve(x^2 - 4, x)")) == "[-2, 2]"
 
 
+def test_solve_preserves_sympy_single_equation_behavior():
+    assert str(evaluate("solve(x + y)")) == "[{x: -y}]"
+
+
+def test_solve_system_without_explicit_symbols_still_works():
+    assert str(evaluate("solve([x + y, x - y])")) == "{x: 0, y: 0}"
+
+
+def test_solve_rejects_matrix_keyword_arguments():
+    with pytest.raises(ValueError, match="matrix keyword arguments"):
+        evaluate("solve(A=[[1,2],[3,4]], b=[1,2])")
+
+
+def test_solve_rejects_matrix_keyword_arguments_with_whitespace():
+    with pytest.raises(ValueError, match="matrix keyword arguments"):
+        evaluate("solve (A=[[1,2],[3,4]], b=[1,2])")
+
+
+def test_assignment_wrapped_solve_rejects_matrix_keyword_arguments():
+    with pytest.raises(ValueError, match="matrix keyword arguments"):
+        evaluate("a=solve(A=[[1,2],[3,4]], b=[1,2])", session_locals={})
+
+
+def test_solve_allows_nested_non_matrix_keyword_arguments():
+    with pytest.raises(NameError, match="foo"):
+        evaluate("solve(foo(A=1), x)")
+
+
 def test_symbol_helpers_for_coefficient_workflows():
     assert str(evaluate('symbols("A B C")')) == "(A, B, C)"
     out = str(

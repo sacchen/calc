@@ -63,7 +63,7 @@ HELP_TEXT = (
     f"{CLI_NAME} v{VERSION} - symbolic CLI calculator\n"
     "\n"
     "usage:\n"
-    f"  {CLI_NAME} [--format MODE] [--latex|--latex-inline|--latex-block] [--strict] [--no-simplify] [--explain-parse] [--wa] [--copy-wa] [--color MODE] '<expression>'\n"
+    f"  {CLI_NAME} [--format MODE] [--latex|--latex-inline|--latex-block] [--strict] [--no-simplify] [--explain-parse] [--wa] [--copy-wa] [--no-wa] [--color MODE] '<expression>'\n"
     f"  {CLI_NAME}\n"
     f"  {CLI_NAME} :examples\n"
     "\n"
@@ -77,6 +77,7 @@ HELP_TEXT = (
     "  --explain-parse show normalized expression on stderr\n"
     "  --wa            always print WolframAlpha equivalent link\n"
     "  --copy-wa       copy WolframAlpha link to clipboard when shown\n"
+    "  --no-wa         never print WolframAlpha equivalent link\n"
     "  --color MODE    diagnostics color: auto, always, never\n"
     "\n"
     "upgrade:\n"
@@ -312,12 +313,13 @@ def _print_error(
     expr: str | None = None,
     color_mode: str = "auto",
     session_locals: dict | None = None,
+    no_wa: bool = False,
 ) -> None:
     print(_style(f"E: {exc}", color="red", stream=sys.stderr, color_mode=color_mode), file=sys.stderr)
     hint = _hint_for_error(str(exc), expr=expr, session_locals=session_locals)
     if hint:
         print(_style(f"hint: {hint}", color="yellow", stream=sys.stderr, color_mode=color_mode), file=sys.stderr)
-    if expr and should_print_wolfram_hint(exc):
+    if not no_wa and expr and should_print_wolfram_hint(exc):
         _print_wolfram_hint(expr, color_mode=color_mode)
 
 
@@ -543,6 +545,7 @@ def _execute_expression(
     explain_parse: bool,
     always_wa: bool,
     copy_wa: bool,
+    no_wa: bool,
     color_mode: str,
     session_locals: dict | None = None,
 ) -> None:
@@ -599,7 +602,7 @@ def _execute_expression(
             _style("hint: zoo = complex infinity; the expression is undefined (e.g. division by zero)", color="yellow", stream=sys.stderr, color_mode=color_mode),
             file=sys.stderr,
         )
-    if always_wa or _is_complex_expression(expr):
+    if not no_wa and (always_wa or _is_complex_expression(expr)):
         _print_wolfram_hint(expr, copy_link=copy_wa, color_mode=color_mode)
 
 
@@ -620,6 +623,7 @@ def run(argv: list[str] | None = None) -> int:
     explain_parse = options.explain_parse
     always_wa = options.always_wa
     copy_wa = options.copy_wa
+    no_wa = options.no_wa
     color_mode = options.color_mode
     remaining = list(options.remaining)
 
@@ -636,11 +640,12 @@ def run(argv: list[str] | None = None) -> int:
                 explain_parse=explain_parse,
                 always_wa=always_wa,
                 copy_wa=copy_wa,
+                no_wa=no_wa,
                 color_mode=color_mode,
             )
             return 0
         except Exception as exc:
-            _print_error(exc, expr, color_mode=color_mode)
+            _print_error(exc, expr, color_mode=color_mode, no_wa=no_wa)
             return 1
 
     startup_update_lines = _repl_startup_update_status_lines()
@@ -661,6 +666,7 @@ def run(argv: list[str] | None = None) -> int:
     repl_explain_parse = explain_parse
     repl_always_wa = always_wa
     repl_copy_wa = copy_wa
+    repl_no_wa = no_wa
     repl_color_mode = color_mode
     tutorial_state = {"active": False, "index": 0}
     expr: str | None = None
@@ -685,6 +691,7 @@ def run(argv: list[str] | None = None) -> int:
                 repl_explain_parse = parsed_inline.explain_parse
                 repl_always_wa = parsed_inline.always_wa
                 repl_copy_wa = parsed_inline.copy_wa
+                repl_no_wa = parsed_inline.no_wa
                 repl_color_mode = parsed_inline.color_mode
                 if not parsed_inline.remaining:
                     print("hint: REPL options updated for this session", file=sys.stderr)
@@ -698,6 +705,7 @@ def run(argv: list[str] | None = None) -> int:
                 explain_parse=repl_explain_parse,
                 always_wa=repl_always_wa,
                 copy_wa=repl_copy_wa,
+                no_wa=repl_no_wa,
                 color_mode=repl_color_mode,
                 session_locals=session_locals,
             )
@@ -706,7 +714,7 @@ def run(argv: list[str] | None = None) -> int:
             return 0
         except Exception as exc:
 
-            _print_error(exc, expr=expr, color_mode=repl_color_mode, session_locals=session_locals)
+            _print_error(exc, expr=expr, color_mode=repl_color_mode, session_locals=session_locals, no_wa=repl_no_wa)
 
 
 
