@@ -4,6 +4,25 @@ import re
 
 from .core import normalize_expression, relaxed_function_rewrites, reserved_name_suggestion
 
+FALLBACK_HINT_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
+    (
+        re.compile(r"unterminated string literal|eol while scanning string literal|unterminated string"),
+        "check quote balance: close every ' or \" in the expression",
+    ),
+    (
+        re.compile(r"eof in multi-line statement|unexpected eof while parsing"),
+        "check missing closing ')' or unmatched quote",
+    ),
+    (
+        re.compile(r"unexpected character after line continuation character"),
+        "remove stray backslashes; enter plain math syntax",
+    ),
+    (
+        re.compile(r"tokenerror"),
+        "check expression syntax near the end; try :examples for working patterns",
+    ),
+)
+
 
 def should_print_wolfram_hint(exc: Exception) -> bool:
     text = str(exc).lower()
@@ -164,4 +183,7 @@ def hint_for_error(message: str, expr: str | None = None, session_locals: dict |
         return "integer input is too large to materialize; simplify or use a symbolic form first"
     if "empty expression" in text:
         return "enter a math expression, or use :examples"
+    for pattern, hint in FALLBACK_HINT_PATTERNS:
+        if pattern.search(text):
+            return hint
     return None

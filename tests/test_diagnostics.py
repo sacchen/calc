@@ -93,3 +93,18 @@ def test_hint_for_error_additional_branches():
         "use sys.set_int_max_str_digits() to increase the limit",
         expr="(100001)!",
     )
+
+
+def test_hint_for_error_fallback_patterns_and_no_noise():
+    assert diagnostics.hint_for_error(
+        "('unterminated string literal (detected at line 1)', (1, 3))",
+        expr="S('x')",
+    ) == "check quote balance: close every ' or \" in the expression"
+    assert diagnostics.hint_for_error(
+        "EOF in multi-line statement",
+        expr="(2+3",
+    ) == "check missing closing ')' or unmatched quote"
+    assert diagnostics.hint_for_error("unexpected character after line continuation character") == (
+        "remove stray backslashes; enter plain math syntax"
+    )
+    assert diagnostics.hint_for_error("different error") is None
