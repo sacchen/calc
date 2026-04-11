@@ -114,7 +114,7 @@ def hint_for_error(message: str, expr: str | None = None, session_locals: dict |
             return "den syntax: den(expr) (for example den(3/14))"
 
     if text.startswith("linalg ") or text.startswith("unknown linalg "):
-        return "linalg syntax: 'linalg solve A=[[...]] b=[...]' or 'linalg rref A=[[...]]'; use :linalg"
+        return "linalg syntax: 'linalg solve A=[[...]] b=[...]', 'linalg rref A=[[...]]', 'linalg det/inv/rank/eig/nullspace A=[[...]]'; use :linalg"
     if "unexpected eof" in text:
         if expr and ("/d" in expr or expr.strip().startswith("d(")):
             return "derivative syntax: d(expr, var) or d(sin(x))/dx or df(t)/dt"

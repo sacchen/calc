@@ -10,7 +10,7 @@ from importlib.metadata import PackageNotFoundError, version as package_version
 from urllib.parse import quote_plus
 from urllib.request import urlopen
 
-from sympy import Eq
+from sympy import Eq, zoo
 from sympy.matrices.matrixbase import MatrixBase
 
 from .core import evaluate, normalize_expression
@@ -98,7 +98,7 @@ HELP_TEXT = (
     "  calculus: d(expr, var), int(expr, var)\n"
     "  equations: solve(expr, var), Eq(lhs, rhs)\n"
     "  exact helpers: gcd, lcm, isprime, factorint, num, den\n"
-    "  linear algebra: linalg solve A=[[...]] b=[...], linalg rref A=[[...]]\n"
+    "  linear algebra: linalg solve A=[[...]] b=[...], linalg rref/det/inv/rank/nullspace/eig A=[[...]]\n"
     "  ODE shortcut: ode y' = y, y(0)=1\n"
     "  runnable patterns: :examples\n"
     "  guided onboarding: :tutorial or :t"
@@ -195,12 +195,17 @@ ODE_TEXT = (
 )
 LINALG_TEXT = (
     "linear algebra quick reference:\n"
-    "  quick start:\n"
+    "  solve Ax=b:\n"
     "    linalg solve A=[[2,1],[1,3]] b=[1,2]\n"
+    "  row reduction:\n"
     "    linalg rref A=[[1,2],[2,4]]\n"
-    "    msolve(Matrix([[2,1],[1,3]]), Matrix([1,2]))\n"
-    "    rref(Matrix([[1,2],[2,4]]))\n"
-    "    nullspace(Matrix([[1,2],[2,4]]))\n"
+    "  determinant / inverse / rank:\n"
+    "    linalg det A=[[1,2],[3,4]]\n"
+    "    linalg inv A=[[1,2],[3,4]]\n"
+    "    linalg rank A=[[1,2],[2,4]]\n"
+    "  eigenvalues / nullspace:\n"
+    "    linalg eig A=[[1,2],[3,4]]\n"
+    "    linalg nullspace A=[[1,2],[2,4]]\n"
     "\n"
     "symbolic systems:\n"
     "  linsolve((Eq(2*x + y, 1), Eq(x + 3*y, 2)), (x, y))\n"
@@ -492,7 +497,35 @@ def _evaluate_linalg_alias(
         parsed_expr = f"rref(Matrix({matrix_text}))"
         return result, parsed_expr
 
-    raise ValueError("unknown linalg subcommand; use 'solve' or 'rref'")
+    if subcommand in ("det", "inv", "rank", "nullspace", "eig", "eigvals"):
+        params = _parse_linalg_keyed_literals(rest, {"A"})
+        matrix_text = params["A"]
+        matrix_value = evaluate(
+            f"Matrix({matrix_text})",
+            relaxed=relaxed,
+            session_locals=session_locals,
+            simplify_output=simplify_output,
+        )
+        if not isinstance(matrix_value, MatrixBase):
+            raise ValueError(f"linalg {subcommand} expects a matrix literal for A")
+        if subcommand == "det":
+            result = matrix_value.det()
+            parsed_expr = f"det(Matrix({matrix_text}))"
+        elif subcommand == "inv":
+            result = matrix_value.inv()
+            parsed_expr = f"inv(Matrix({matrix_text}))"
+        elif subcommand == "rank":
+            result = matrix_value.rank()
+            parsed_expr = f"rank(Matrix({matrix_text}))"
+        elif subcommand == "nullspace":
+            result = matrix_value.nullspace()
+            parsed_expr = f"nullspace(Matrix({matrix_text}))"
+        else:  # eig / eigvals
+            result = matrix_value.eigenvals()
+            parsed_expr = f"eigvals(Matrix({matrix_text}))"
+        return result, parsed_expr
+
+    raise ValueError("unknown linalg subcommand; use: solve, rref, det, inv, rank, nullspace, eig")
 
 
 def _latest_pypi_version() -> str | None:
@@ -684,6 +717,11 @@ def _execute_expression(
         )
         rendered = _render_value(value, format_mode=format_mode, expr=expr, relaxed=relaxed)
     print(rendered)
+    if value is zoo:
+        print(
+            _style("hint: zoo = complex infinity; the expression is undefined (e.g. division by zero)", color="yellow", stream=sys.stderr, color_mode=color_mode),
+            file=sys.stderr,
+        )
     if always_wa or _is_complex_expression(expr):
         _print_wolfram_hint(expr, copy_link=copy_wa, color_mode=color_mode)
 

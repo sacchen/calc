@@ -64,6 +64,10 @@ phil "ode y' = y"
 phil "ode y' = y, y(0)=1"
 phil "linalg solve A=[[2,1],[1,3]] b=[1,2]"
 phil "linalg rref A=[[1,2],[2,4]]"
+phil "linalg det A=[[1,2],[3,4]]"
+phil "linalg inv A=[[1,2],[3,4]]"
+phil "linalg eig A=[[1,2],[3,4]]"
+phil "linalg nullspace A=[[1,2],[2,4]]"
 phil :examples
 phil :tutorial
 phil :ode
@@ -229,13 +233,13 @@ $ phil --format pretty 'Matrix([[1,2],[3,4]])'
 | Integer GCD/LCM | `gcd(a, b)`, `lcm(a, b)` |
 | Primality / factorization | `isprime(n)`, `factorint(n)` |
 | Rational parts | `num(expr)`, `den(expr)` |
-| Matrix determinant | `det(Matrix([[...]]))` |
-| Matrix inverse | `inv(Matrix([[...]]))` |
-| Matrix rank | `rank(Matrix([[...]]))` |
-| Matrix eigenvalues | `eigvals(Matrix([[...]]))` |
-| Matrix RREF | `rref(Matrix([[...]]))` |
-| Matrix nullspace | `nullspace(Matrix([[...]]))` |
-| Solve linear system (Ax=b) | `msolve(Matrix([[...]]), Matrix([...]))` |
+| Matrix determinant | `det(Matrix([[...]]))` or `linalg det A=[[...]]` |
+| Matrix inverse | `inv(Matrix([[...]]))` or `linalg inv A=[[...]]` |
+| Matrix rank | `rank(Matrix([[...]]))` or `linalg rank A=[[...]]` |
+| Matrix eigenvalues | `eigvals(Matrix([[...]]))` or `linalg eig A=[[...]]` |
+| Matrix RREF | `rref(Matrix([[...]]))` or `linalg rref A=[[...]]` |
+| Matrix nullspace | `nullspace(Matrix([[...]]))` or `linalg nullspace A=[[...]]` |
+| Solve linear system (Ax=b) | `msolve(Matrix([[...]]), Matrix([...]))` or `linalg solve A=[[...]] b=[...]` |
 | Symbolic linear solve | `linsolve((Eq(...), Eq(...)), (x, y))` |
 
 ### Common symbols

@@ -50,3 +50,4 @@ jobs:
       - run: uv tool install --force --reinstall --refresh .
       - run: phil ':version'
       - run: phil 'd(sin(x))/dx'
+      - run: phil "linalg det A=[[1,2],[3,4]]"

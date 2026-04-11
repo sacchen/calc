@@ -440,7 +440,9 @@ def test_cli_linalg_shortcut():
     proc = run_cli(":linalg")
     assert proc.returncode == 0
     assert "linear algebra quick reference:" in proc.stdout
-    assert "msolve(Matrix([[2,1],[1,3]]), Matrix([1,2]))" in proc.stdout
+    assert "linalg solve A=[[2,1],[1,3]] b=[1,2]" in proc.stdout
+    assert "linalg eig A=[[1,2],[3,4]]" in proc.stdout
+    assert "linalg nullspace A=[[1,2],[2,4]]" in proc.stdout
 
     proc = run_cli(":la")
     assert proc.returncode == 0
@@ -506,6 +508,66 @@ def test_cli_linalg_alias_rejects_malformed_comma_separators():
     proc = run_cli("linalg solve A,=[[2,1],[1,3]] b=[1,2]")
     assert proc.returncode == 1
     assert "must use '='" in proc.stderr
+
+
+def test_cli_linalg_alias_det():
+    proc = run_cli("linalg det A=[[1,2],[3,4]]")
+    assert proc.returncode == 0
+    assert "-2" in proc.stdout
+
+
+def test_cli_linalg_alias_inv():
+    proc = run_cli("linalg inv A=[[1,2],[3,4]]")
+    assert proc.returncode == 0
+    assert "Matrix" in proc.stdout
+    assert "-2" in proc.stdout
+
+
+def test_cli_linalg_alias_rank():
+    proc = run_cli("linalg rank A=[[1,2],[2,4]]")
+    assert proc.returncode == 0
+    assert proc.stdout.strip() == "1"
+
+
+def test_cli_linalg_alias_eig():
+    proc = run_cli("linalg eig A=[[1,0],[0,2]]")
+    assert proc.returncode == 0
+    assert "1" in proc.stdout
+    assert "2" in proc.stdout
+
+
+def test_cli_linalg_alias_nullspace():
+    proc = run_cli("linalg nullspace A=[[1,2],[2,4]]")
+    assert proc.returncode == 0
+    assert "Matrix" in proc.stdout
+
+
+def test_cli_linalg_alias_unknown_subcommand():
+    proc = run_cli("linalg foo A=[[1,2],[3,4]]")
+    assert proc.returncode == 1
+    assert "unknown linalg subcommand" in proc.stderr
+
+
+def test_cli_simplify_non_basic_no_crash():
+    # Regression: typing a bare helper name (like S) used to crash with
+    # Atom._eval_simplify() missing argument. It should now return gracefully.
+    proc = run_cli("S")
+    assert proc.returncode == 0
+
+
+def test_cli_zoo_hint():
+    proc = run_cli("1/0")
+    assert proc.returncode == 0
+    assert "zoo" in proc.stdout
+    assert "complex infinity" in proc.stderr
+
+
+def test_cli_zoo_hint_decimal_division():
+    # Decimal inputs are rationalized, so 0.1+0.2-0.3 == 0 exactly.
+    proc = run_cli("1/(0.1 + 0.2 - 0.3)")
+    assert proc.returncode == 0
+    assert "zoo" in proc.stdout
+    assert "complex infinity" in proc.stderr
 
 
 def test_repl_help_and_quit():
