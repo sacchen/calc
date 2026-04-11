@@ -14,6 +14,7 @@ class CLIOptions:
     explain_parse: bool = False
     always_wa: bool = False
     copy_wa: bool = False
+    no_wa: bool = False
     color_mode: str = "auto"
     remaining: tuple[str, ...] = ()
 
@@ -25,6 +26,7 @@ def parse_options(args: list[str], *, help_text: str) -> CLIOptions:
     explain_parse = False
     always_wa = False
     copy_wa = False
+    no_wa = False
     color_mode = "auto"
     idx = 0
     while idx < len(args) and args[idx].startswith("-"):
@@ -80,6 +82,10 @@ def parse_options(args: list[str], *, help_text: str) -> CLIOptions:
             copy_wa = True
             idx += 1
             continue
+        if arg == "--no-wa":
+            no_wa = True
+            idx += 1
+            continue
         if arg == "--color":
             if idx + 1 >= len(args):
                 raise ValueError("missing value for --color")
@@ -110,6 +116,7 @@ def parse_options(args: list[str], *, help_text: str) -> CLIOptions:
         explain_parse=explain_parse,
         always_wa=always_wa,
         copy_wa=copy_wa,
+        no_wa=no_wa,
         color_mode=color_mode,
         remaining=tuple(args[idx:]),
     )

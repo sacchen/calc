@@ -80,6 +80,16 @@ def _int(expr, var=None):
     return integrate(expr, var)
 
 
+def _solve(*args, **kwargs):
+    if len(args) == 1:
+        target = args[0]
+        if isinstance(target, _sympy.Basic):
+            free_symbols = sorted(target.free_symbols, key=str)
+            if len(free_symbols) > 1:
+                raise ValueError("ambiguous variable for solve; pass one explicitly")
+    return solve(*args, **kwargs)
+
+
 def _num(expr):
     return expr.as_numer_denom()[0]
 
@@ -105,7 +115,7 @@ LOCALS_DICT = {
     "factorint": factorint,
     "num": _num,
     "den": _den,
-    "solve": solve,
+    "solve": _solve,
     "dsolve": dsolve,
     "Eq": Eq,
     "N": N,
@@ -391,6 +401,55 @@ def _validate_expression(expression: str) -> None:
         raise ValueError("blocked token in expression")
 
 
+def _split_top_level_commas(text: str) -> list[str]:
+    parts: list[str] = []
+    current: list[str] = []
+    paren_depth = 0
+    bracket_depth = 0
+    brace_depth = 0
+    for ch in text:
+        if ch == "(":
+            paren_depth += 1
+        elif ch == ")":
+            paren_depth = max(0, paren_depth - 1)
+        elif ch == "[":
+            bracket_depth += 1
+        elif ch == "]":
+            bracket_depth = max(0, bracket_depth - 1)
+        elif ch == "{":
+            brace_depth += 1
+        elif ch == "}":
+            brace_depth = max(0, brace_depth - 1)
+        if ch == "," and paren_depth == 0 and bracket_depth == 0 and brace_depth == 0:
+            piece = "".join(current).strip()
+            if piece:
+                parts.append(piece)
+            current = []
+            continue
+        current.append(ch)
+    tail = "".join(current).strip()
+    if tail:
+        parts.append(tail)
+    return parts
+
+
+def _is_matrix_style_solve_input(expression: str) -> bool:
+    stripped = expression.strip()
+    match = re.match(r"solve\s*\((.*)\)\s*$", stripped)
+    if not match:
+        return False
+    args = _split_top_level_commas(match.group(1))
+    top_level_kwargs: set[str] = set()
+    for arg in args:
+        if "=" not in arg:
+            continue
+        name, _value = arg.split("=", 1)
+        name = name.strip()
+        if name.isidentifier():
+            top_level_kwargs.add(name)
+    return "A" in top_level_kwargs and ("b" in top_level_kwargs or "B" in top_level_kwargs)
+
+
 def normalize_expression(expression: str, relaxed: bool = False) -> str:
     normalized = _strip_outer_wrappers(expression)
     normalized = normalized.replace("−", "-")
@@ -551,6 +610,8 @@ def evaluate(
     simplify_output: bool = True,
 ):
     _validate_expression(expression)
+    if _is_matrix_style_solve_input(expression):
+        raise ValueError("solve() does not accept matrix keyword arguments")
     normalized = normalize_expression(expression, relaxed=relaxed)
     transforms = RELAXED_TRANSFORMS if relaxed else TRANSFORMS
     local_dict = dict(LOCALS_DICT)
